@@ -24,7 +24,7 @@ final class History {
                     try(Cursor c=context.getContentResolver().query(uri,new String[]{CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.DATE},"_id>?",new String[]{String.valueOf(checkpoint)},"_id ASC")) {
                         if(c==null)throw new IllegalStateException();int count=0;
                         while(c.moveToNext()) {String phone=Analysis.phone(c.getString(1));if(!phone.isEmpty()){if(store.byPhone(phone).optLong("id")==0)created++;store.recordCall(phone,c.getLong(2),PhoneData.contact(context,phone),context.getSharedPreferences("settings",0).getString("newBusiness",""));matched++;}checkpoint=c.getLong(0);count++;}
-                        context.getSharedPreferences("settings",0).edit().putLong("historyId",checkpoint).commit();more=count>=200;
+                        context.getSharedPreferences("settings",0).edit().putLong("historyId",checkpoint).apply();more=count>=200;
                     }
                 }
             }

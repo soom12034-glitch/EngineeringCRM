@@ -20,6 +20,7 @@ import org.json.JSONObject;
 import java.time.LocalDate;
 import java.util.ArrayList;
 
+@android.annotation.SuppressLint("SetTextI18n")
 public final class MainActivity extends Activity {
     private static final int MAX_BACKUP_BYTES=25*1024*1024;
     private final int BLUE=Color.rgb(91,74,202), INK=Color.rgb(35,42,61), MUTED=Color.rgb(125,134,153), BG=Color.rgb(247,248,252), LINE=Color.rgb(231,234,242);
