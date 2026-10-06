@@ -1,0 +1,5 @@
+package com.amalaei.engineering;
+public class SurveyRequestsTest {
+ static void check(boolean x){if(!x)throw new AssertionError();}
+ public static void main(String[] args){for(String type:SurveyRequests.KEYS){check(SurveyRequests.valid(type));String[] stages=SurveyRequests.stages("survey",type);check(stages.length==6);check(FollowUps.pending(3,"2026-10-05","09:00",""));check(!FollowUps.pending(4,"2026-10-05","09:00",""));check(!FollowUps.pending(5,"2026-10-05","09:00",""));for(String[] f:SurveyRequests.fields(type))check(f.length==2);}check(!SurveyRequests.valid("unknown"));check(SurveyRequests.stages("survey","maintenance")[4].equals("تم التسليم"));check(SurveyRequests.stages("survey","support")[4].equals("تم حل المشكلة"));check(SurveyRequests.stages("survey","calibration")[3].equals("جاهز للتسليم"));for(String type:SurveyRequests.KEYS)check(SurveyRequests.stages("software",type)[4].equals("تم التعاقد"));System.out.println("PASS: surveying service completion/cancellation do not notify; software stages remain independent.");}
+}

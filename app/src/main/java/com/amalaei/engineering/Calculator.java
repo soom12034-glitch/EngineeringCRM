@@ -1,0 +1,20 @@
+package com.amalaei.engineering;
+import java.math.*;
+final class Calculator {
+ private String expression="";private boolean finished=false;
+ private static final MathContext MC=MathContext.DECIMAL128;
+ String expression(){return expression;}boolean finished(){return finished;}void restore(String s,boolean done){restore(s);finished=done;}void restore(String s){if(s!=null&&s.length()<=250&&s.matches("[0-9.+*/()\\-]*")){expression=s;finished=false;}}
+ void press(String key){if(key.equals("C")){expression="";finished=false;return;}if(key.equals("back")){if(!expression.isEmpty())expression=expression.substring(0,expression.length()-1);finished=false;return;}if(key.equals("=")||key.equals("tax")){BigDecimal result=value();expression=plain(result);finished=true;return;}if(key.equals("sign")){if(expression.isEmpty())expression="-";else {BigDecimal v=value().negate();expression=plain(v);finished=true;}return;}if(key.matches("[0-9.]")){if(finished){expression="";finished=false;}String part=expression.substring(lastOperator()+1);if(key.equals(".")){if(part.contains("."))return;if(part.isEmpty())key="0.";}if(part.replace(".","").length()>=16)throw new IllegalArgumentException("الحد الأقصى 16 رقمًا للعدد الواحد");append(key);return;}if(key.matches("[+*/-]")){finished=false;if(expression.isEmpty()){if(key.equals("-"))expression="-";return;}char last=expression.charAt(expression.length()-1);if("+*/-".indexOf(last)>=0){if(expression.equals("-"))return;if(key.equals("-")&&(last=='*'||last=='/')){append(key);return;}if(last=='-'&&expression.length()>1&&"*/".indexOf(expression.charAt(expression.length()-2))>=0){expression=expression.substring(0,expression.length()-2)+key;}else expression=expression.substring(0,expression.length()-1)+key;}else append(key);return;}throw new IllegalArgumentException("زر غير صالح");}
+ private int lastOperator(){for(int i=expression.length()-1;i>=0;i--)if("+*/-".indexOf(expression.charAt(i))>=0)return i;return -1;}
+ private void append(String k){if(expression.length()+k.length()>250)throw new IllegalArgumentException("العملية طويلة جدًا؛ اضغط يساوي للمتابعة");expression+=k;}
+ BigDecimal value(){return evaluate(expression.isEmpty()?"0":expression);}
+ static String plain(BigDecimal value){if(value.precision()>40||value.abs().compareTo(new BigDecimal("1E30"))>=0)throw new IllegalArgumentException("النتيجة تتجاوز سعة الحاسبة");return value.stripTrailingZeros().toPlainString();}
+ static BigDecimal[] vat(BigDecimal value){BigDecimal base=value.setScale(2,RoundingMode.HALF_UP);BigDecimal tax=base.multiply(new BigDecimal("0.15")).setScale(2,RoundingMode.HALF_UP);return new BigDecimal[]{base,tax,base.add(tax)};}
+ static String money(BigDecimal value){return String.format(java.util.Locale.US,"%,.2f",value);}
+ static BigDecimal evaluate(String text){Parser p=new Parser(text);BigDecimal value=p.sum();if(p.at!=text.length())throw new IllegalArgumentException("أكمل العملية أولًا");plain(value);return value;}
+ private static final class Parser {final String text;int at=0;Parser(String s){if(s.length()>250)throw new IllegalArgumentException("العملية طويلة جدًا");text=s;}
+ BigDecimal sum(){BigDecimal a=product();while(at<text.length()&&(text.charAt(at)=='+'||text.charAt(at)=='-')){char op=text.charAt(at++);BigDecimal b=product();a=op=='+'?a.add(b,MC):a.subtract(b,MC);}return a;}
+ BigDecimal product(){BigDecimal a=number();while(at<text.length()&&(text.charAt(at)=='*'||text.charAt(at)=='/')){char op=text.charAt(at++);BigDecimal b=number();if(op=='/'&&b.signum()==0)throw new IllegalArgumentException("لا يمكن القسمة على صفر");a=op=='*'?a.multiply(b,MC):a.divide(b,MC);}return a;}
+ BigDecimal number(){boolean negative=false;if(at<text.length()&&(text.charAt(at)=='-'||text.charAt(at)=='+'))negative=text.charAt(at++)=='-';int start=at;while(at<text.length()&&(Character.isDigit(text.charAt(at))||text.charAt(at)=='.'))at++;if(start==at)throw new IllegalArgumentException("أكمل العملية أولًا");try{BigDecimal n=new BigDecimal(text.substring(start,at),MC);return negative?n.negate():n;}catch(NumberFormatException e){throw new IllegalArgumentException("العدد غير صالح");}}
+ }
+}
