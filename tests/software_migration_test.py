@@ -1,6 +1,6 @@
 import sqlite3,re,json
 from pathlib import Path
-s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text();section=s.split('private void softwareSchema(SQLiteDatabase db){',1)[1].split('\n    }',1)[0]
+s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text(encoding='utf-8');section=s.split('private void softwareSchema(SQLiteDatabase db){',1)[1].split('\n    }',1)[0]
 db=sqlite3.connect(':memory:');db.execute('CREATE TABLE leads(id INTEGER PRIMARY KEY,name TEXT,business TEXT)');db.executemany('INSERT INTO leads VALUES(?,?,?)',[(1,'شركة برامج','software'),(2,'عميل مساحة','survey')])
 for sql in re.findall(r'db.execSQL\("([^"\n]+)"\)',section):db.execute(sql)
 assert db.execute('SELECT count(*) FROM leads').fetchone()[0]==2

@@ -1,7 +1,7 @@
 from pathlib import Path
 import sqlite3,re,json
 root=Path(__file__).resolve().parents[1]
-s=(root/'app/src/main/java/com/amalaei/engineering/Store.java').read_text()
+s=(root/'app/src/main/java/com/amalaei/engineering/Store.java').read_text(encoding='utf-8')
 base=s.split('public void onCreate(SQLiteDatabase db) {',1)[1].split('extend(db);',1)[0]
 extend=s.split('private void extend(SQLiteDatabase db) {',1)[1].split('\n    }',1)[0]
 ads=s.split('private void advertisingSchema(SQLiteDatabase db){',1)[1].split('\n    }',1)[0]
@@ -31,7 +31,7 @@ except sqlite3.IntegrityError:pass
 assert c.execute('SELECT COUNT(*) FROM posts').fetchone()[0]==3
 assert c.execute('SELECT COUNT(*) FROM postShares').fetchone()[0]==1
 # Real path rule used by the image reader accepts only content-addressed image basenames.
-media=(root/'app/src/main/java/com/amalaei/engineering/PostMedia.java').read_text()
+media=(root/'app/src/main/java/com/amalaei/engineering/PostMedia.java').read_text(encoding='utf-8')
 pattern=re.search(r'name.matches\("([^"\n]+)"\)',media).group(1).replace('\\\\','\\')
 assert re.fullmatch(pattern,'a'*64+'.png')
 for name in ['../clients.db','a'*64+'.svg','/etc/passwd','a'*64+'.png/../clients.db','a'*64+'.png%2F..']:

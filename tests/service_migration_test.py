@@ -1,6 +1,6 @@
 import sqlite3,re,json
 from pathlib import Path
-s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text()
+s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text(encoding='utf-8')
 sql=re.search(r'ALTER TABLE leads ADD COLUMN requestType[^"\n]+',s).group()
 db=sqlite3.connect(':memory:');db.execute('CREATE TABLE leads(id INTEGER PRIMARY KEY,name TEXT,business TEXT,stage INTEGER,requestDetails TEXT,followUp TEXT)')
 data=json.dumps({'survey':{'model':'TS','serialNumber':'123','calibrationDate':'2027-10-05'}})

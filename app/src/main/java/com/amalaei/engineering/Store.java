@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import org.json.JSONObject;
 import org.json.JSONArray;
+import java.io.File;
 import java.util.ArrayList;
 
 final class Store extends SQLiteOpenHelper {
@@ -46,9 +47,10 @@ final class Store extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE postShares (id INTEGER PRIMARY KEY AUTOINCREMENT, postId INTEGER NOT NULL, at INTEGER NOT NULL)");
     }
     JSONObject post(long id){ArrayList<JSONObject> rows=query("SELECT * FROM posts WHERE id=?",String.valueOf(id));return rows.isEmpty()?new JSONObject():rows.get(0);}
-    long savePost(JSONObject post)throws Exception {String business=post.optString("business"),title=post.optString("title").trim(),date=post.optString("plannedDate");if(!business.equals(AppMode.MODE))throw new IllegalArgumentException("حدد نشاط المنشور");if(title.isEmpty())throw new IllegalArgumentException("أدخل عنوانًا للمنشور");if(!date.isEmpty())java.time.LocalDate.parse(date);String image=post.optString("image");if(!image.isEmpty()&&!PostMedia.file(context,image).isFile())throw new IllegalArgumentException("الصورة غير موجودة");if(post.optString("body").trim().isEmpty()&&image.isEmpty())throw new IllegalArgumentException("أضف نصًا أو صورة للمنشور");ContentValues v=new ContentValues();v.put("business",business);v.put("title",title);v.put("body",post.optString("body"));v.put("category",post.optString("category","تعريف"));v.put("plannedDate",date);v.put("image",image);long id=post.optLong("id");if(id>0){if(getWritableDatabase().update("posts",v,"id=?",new String[]{String.valueOf(id)})!=1)throw new IllegalStateException("المنشور لم يعد موجودًا");return id;}v.put("createdAt",System.currentTimeMillis());return getWritableDatabase().insertOrThrow("posts",null,v);}
+    long savePost(JSONObject post)throws Exception {String business=post.optString("business"),title=post.optString("title").trim(),date=post.optString("plannedDate");if(!business.equals(AppMode.MODE))throw new IllegalArgumentException("حدد نشاط المنشور");if(title.isEmpty())throw new IllegalArgumentException("أدخل عنوانًا للمنشور");if(!date.isEmpty())java.time.LocalDate.parse(date);String image=post.optString("image");if(!image.isEmpty()&&!PostMedia.file(context,image).isFile())throw new IllegalArgumentException("الصورة غير موجودة");if(post.optString("body").trim().isEmpty()&&image.isEmpty())throw new IllegalArgumentException("أضف نصًا أو صورة للمنشور");ContentValues v=new ContentValues();v.put("business",business);v.put("title",title);v.put("body",post.optString("body"));v.put("category",post.optString("category","تعريف"));v.put("plannedDate",date);v.put("image",image);long id=post.optLong("id");if(id>0){String previous=post(id).optString("image");if(getWritableDatabase().update("posts",v,"id=?",new String[]{String.valueOf(id)})!=1)throw new IllegalStateException("المنشور لم يعد موجودًا");if(!previous.equals(image))removeUnusedImage(previous);return id;}v.put("createdAt",System.currentTimeMillis());return getWritableDatabase().insertOrThrow("posts",null,v);}
     void preparedPost(long id){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{long at=System.currentTimeMillis();ContentValues log=new ContentValues();log.put("postId",id);log.put("at",at);db.insertOrThrow("postShares",null,log);ContentValues v=new ContentValues();v.put("lastPreparedAt",at);db.update("posts",v,"id=?",new String[]{String.valueOf(id)});db.setTransactionSuccessful();}finally{db.endTransaction();}}
-    void removePost(long id){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("postShares","postId=?",new String[]{String.valueOf(id)});db.delete("posts","id=?",new String[]{String.valueOf(id)});db.setTransactionSuccessful();}finally{db.endTransaction();}}
+    void removePost(long id){String image=post(id).optString("image");SQLiteDatabase db=getWritableDatabase();db.beginTransaction();boolean success=false;try{db.delete("postShares","postId=?",new String[]{String.valueOf(id)});db.delete("posts","id=?",new String[]{String.valueOf(id)});db.setTransactionSuccessful();success=true;}finally{db.endTransaction();}if(success)removeUnusedImage(image);}
+    void removeUnusedImage(String image){if(image==null||image.isEmpty()||!query("SELECT id FROM posts WHERE image=? LIMIT 1",image).isEmpty())return;try{File target=PostMedia.file(context,image);if(target.isFile())target.delete();}catch(Exception ignored){}}
     private void profileSchema(SQLiteDatabase db){
         db.execSQL("CREATE TABLE profiles (business TEXT PRIMARY KEY CHECK(business IN ('survey','software')), data TEXT NOT NULL)");
         for(String activity:new String[]{AppMode.MODE})try{ContentValues row=new ContentValues();row.put("business",activity);row.put("data",defaultProfile(activity).toString());db.insertOrThrow("profiles",null,row);}catch(Exception e){throw new IllegalStateException("تعذر ترقية ملفات المنشآت",e);}
@@ -129,11 +131,11 @@ final class Store extends SQLiteOpenHelper {
         if(backup.optInt("version")<1 || backup.optInt("version")>7)throw new IllegalArgumentException("نسخة غير مدعومة");
         JSONArray leads=backup.getJSONArray("leads"),messages=backup.getJSONArray("messages"),events=backup.optInt("version")>=2?backup.getJSONArray("events"):new JSONArray();
         if(leads.length()>50000 || messages.length()>50000 || events.length()>200000)throw new IllegalArgumentException("النسخة كبيرة جدًا");
-        JSONArray posts=backup.optInt("version")>=3?backup.getJSONArray("posts"):new JSONArray(),shares=backup.optInt("version")>=3?backup.getJSONArray("postShares"):new JSONArray();if(posts.length()>10000||shares.length()>100000)throw new IllegalArgumentException("مكتبة المنشورات كبيرة جدًا");if(backup.optInt("version")>=3)PostMedia.restore(context,posts,backup.getJSONObject("postImages"));
+        JSONArray posts=backup.optInt("version")>=3?backup.getJSONArray("posts"):new JSONArray(),shares=backup.optInt("version")>=3?backup.getJSONArray("postShares"):new JSONArray();if(posts.length()>10000||shares.length()>100000)throw new IllegalArgumentException("مكتبة المنشورات كبيرة جدًا");PostMedia.RestorePlan imagePlan=PostMedia.validateRestore(posts,backup.optInt("version")>=3?backup.getJSONObject("postImages"):new JSONObject());
         JSONArray profiles=backup.optInt("version")>=4?backup.getJSONArray("profiles"):new JSONArray();if(profiles.length()>2)throw new IllegalArgumentException("عدد ملفات المنشآت غير صالح");for(int i=0;i<profiles.length();i++)new JSONObject(profiles.getJSONObject(i).getString("data"));
         JSONArray quotes=backup.optInt("version")>=5?backup.getJSONArray("quotes"):new JSONArray();if(quotes.length()>10000)throw new IllegalArgumentException("عروض كثيرة جدًا");for(int i=0;i<quotes.length();i++)Quotation.validate(new JSONObject(quotes.getJSONObject(i).getString("data")));
         JSONArray work=backup.optInt("version")>=7?backup.getJSONArray("softwareRequests"):new JSONArray(),products=backup.optInt("version")>=7?backup.getJSONArray("softwareProducts"):new JSONArray();if(work.length()>20000||products.length()>5000)throw new IllegalArgumentException("بيانات البرامج كبيرة جدًا");for(int i=0;i<work.length();i++)SoftwareWork.validate(new JSONObject(work.getJSONObject(i).getString("data")));
-        SQLiteDatabase db=getWritableDatabase(); db.beginTransaction();
+        SQLiteDatabase db=getWritableDatabase();java.util.ArrayList<java.io.File> installed=new java.util.ArrayList<>();boolean restored=false;db.beginTransaction();
         try {
             db.delete("softwareRequests",null,null);db.delete("softwareProducts",null,null);
             if(backup.optInt("version")>=5)db.delete("quotes",null,null);
@@ -149,8 +151,9 @@ final class Store extends SQLiteOpenHelper {
             for(int i=0;i<work.length();i++){JSONObject row=work.getJSONObject(i);JSONObject q=new JSONObject(row.getString("data"));q.put("id",row.getLong("id")).put("leadId",row.getLong("leadId"));row.put("data",q.toString()).put("notified","{}");insertJson(db,"softwareRequests",row);}
             for(int i=0;i<products.length();i++)insertJson(db,"softwareProducts",products.getJSONObject(i));
             db.execSQL("UPDATE leads SET lastNotified=''");
-            db.setTransactionSuccessful();
-        } finally { db.endTransaction(); }
+            installed=PostMedia.install(context,imagePlan);db.setTransactionSuccessful();restored=true;
+        } finally { db.endTransaction();if(!restored)PostMedia.remove(installed); }
+        PostMedia.prune(context,posts);
     }
     private void insertJson(SQLiteDatabase db,String table,JSONObject o) throws Exception {
         ContentValues v=new ContentValues(); try(Cursor columns=db.rawQuery("SELECT * FROM "+table+" LIMIT 0",null)){

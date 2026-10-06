@@ -1,6 +1,6 @@
 from pathlib import Path
 import sqlite3,re,json
-s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text()
+s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text(encoding='utf-8')
 section=s.split('private void profileSchema(SQLiteDatabase db){',1)[1].split('\n    }',1)[0]
 schema=re.findall(r'db.execSQL\("([^"\n]+)"\)',section)[0]
 c=sqlite3.connect(':memory:');c.execute('CREATE TABLE leads(id INTEGER PRIMARY KEY,name TEXT)');c.execute("INSERT INTO leads VALUES(1,'عميل محفوظ')");c.execute(schema)

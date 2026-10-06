@@ -7,6 +7,7 @@
     <activity android:name=".QuotePreviewActivity" android:exported="false" />
     <activity android:name=".CalculatorActivity" android:exported="false" />
     <activity android:name=".QuoteActivity" android:exported="false" />
+    <activity android:name=".SoftwareActivity" android:exported="false" />
     <provider android:name=".QuoteProvider" android:authorities="com.amalaei.engineering.quotes" android:exported="false" android:grantUriPermissions="true" />
     <activity android:name=".MainActivity" android:exported="true">
       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>

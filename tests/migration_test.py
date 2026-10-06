@@ -1,6 +1,6 @@
 from pathlib import Path
 import sqlite3,re,json
-s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text()
+s=(Path(__file__).resolve().parents[1]/'app/src/main/java/com/amalaei/engineering/Store.java').read_text(encoding='utf-8')
 create=s.split('public void onCreate(SQLiteDatabase db) {',1)[1].split('extend(db);',1)[0]
 extend=s.split('private void extend(SQLiteDatabase db) {',1)[1].split('\n    }',1)[0]
 sql=lambda x:re.findall(r'db.execSQL\("([^"\n]+)"\)',x)

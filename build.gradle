@@ -1,1 +1,8 @@
 plugins { id 'com.android.application' version '8.10.1' apply false }
+
+def pythonExecutable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3'
+tasks.register('pythonTests', Exec) {
+    workingDir rootDir
+    commandLine pythonExecutable, 'tests/run_python_tests.py'
+}
+tasks.register('check') { dependsOn ':app:check', 'pythonTests' }
