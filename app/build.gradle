@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.amalaei.engineering'
     compileSdk 36
-    defaultConfig { applicationId 'com.soom12034.engineeringcrm'; minSdk 29; targetSdk 36; versionCode 3; versionName '1.1.0' }
+    defaultConfig { applicationId 'com.soom12034.engineeringcrm'; minSdk 29; targetSdk 36; versionCode 4; versionName '1.2.0' }
     flavorDimensions 'distribution'
     productFlavors {
         play {
