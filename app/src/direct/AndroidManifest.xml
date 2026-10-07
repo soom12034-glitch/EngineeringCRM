@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.READ_CALL_LOG" />
+  <application>
+    <service android:name=".IncomingService" android:exported="true" android:permission="android.permission.BIND_SCREENING_SERVICE">
+      <intent-filter><action android:name="android.telecom.CallScreeningService" /></intent-filter>
+    </service>
+  </application>
+</manifest>

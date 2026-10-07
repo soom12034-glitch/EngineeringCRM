@@ -111,7 +111,7 @@ final class Store extends SQLiteOpenHelper {
             if(lead.optLong("id")>0) {
                 if (!contact.isEmpty() && (lead.optString("name").equals(phone) || lead.optString("name").isEmpty())) values.put("name",contact);
                 db.update("leads",values,"id=?",new String[]{String.valueOf(lead.optLong("id"))});
-            } else { values.put("business",AppMode.MODE);values.put("name",contact.isEmpty()?phone:contact); values.put("phone",phone); db.insertOrThrow("leads",null,values); }
+            } else { values.put("business",AppMode.accepts(activity)?activity:"");values.put("name",contact.isEmpty()?phone:contact); values.put("phone",phone); db.insertOrThrow("leads",null,values); }
             long leadId=byPhone(phone).optLong("id");event(leadId,"call","اتصال مسجل من الهاتف",at,"call|"+phone+"|"+at);
             db.setTransactionSuccessful();
         } finally { db.endTransaction(); }
