@@ -10,6 +10,9 @@ public final class CallCsvParserTest {
         if(semicolon.size()!=2||semicolon.get(1).size()!=3||!Analysis.phone(semicolon.get(1).get(1)).equals("+966551234567"))throw new AssertionError("Arabic semicolon CSV failed");
         ArrayList<ArrayList<String>> tab=CallCsvImporter.parse("contact\tnumber\ttimestamp\nACME\t+966501234567\t1760000000000");
         if(tab.size()!=2||tab.get(1).size()!=3)throw new AssertionError("tab-separated CSV failed");
-        System.out.println("PASS: call CSV parser supports quoted comma, Arabic semicolon, tab and Arabic digits.");
+        ArrayList<ArrayList<String>> unknown=CallCsvImporter.parse("تقرير المكالمات;;\nجهة الاتصال;معرّف;بدء المكالمة\nأحمد;جوال: 0551234567;2026-10-07 12:00\nشركة;0507654321;2026-10-07 13:00");
+        int header=CallCsvImporter.headerRow(unknown),phone=CallCsvImporter.inferPhoneColumn(unknown,header+1);
+        if(header!=1||phone!=1||!CallCsvImporter.phoneValue(unknown.get(2).get(phone)).equals("+966551234567"))throw new AssertionError("unknown phone header inference failed");
+        System.out.println("PASS: call CSV parser supports quoted comma, Arabic semicolon, tab, preambles, unknown headers and Arabic digits.");
     }
 }

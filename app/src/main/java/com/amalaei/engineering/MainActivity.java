@@ -106,7 +106,7 @@ public final class MainActivity extends Activity {
         if(list.size()>limit)button(content,"عرض المزيد",()->{limit+=100;render();});
     }
     private void calculatorCard(){
-        LinearLayout tool=row();tool.setPadding(dp(18),dp(14),dp(18),dp(14));tool.setBackground(gradient(NAVY,0xFF164E63,20));tool.setElevation(dp(3));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(102));lp.setMargins(0,dp(16),0,dp(10));content.addView(tool,lp);
+        LinearLayout tool=row();tool.setPadding(dp(18),dp(14),dp(18),dp(14));tool.setBackground(gradient(NAVY,0xFF164E63,20));tool.setElevation(dp(3));tool.setMinimumHeight(dp(102));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,dp(16),0,dp(10));content.addView(tool,lp);
         LinearLayout copy=column();copy.setGravity(android.view.Gravity.CENTER_VERTICAL);tool.addView(copy,new LinearLayout.LayoutParams(0,-1,1));TextView title=text("الحاسبة الذكية",19);title.setTextColor(Color.WHITE);copy.addView(title);TextView detail=text("حساب سريع وضريبة القيمة المضافة 15%",12);detail.setTextColor(0xFFCCFBF1);copy.addView(detail);
         LinearLayout icon=column();icon.setGravity(17);icon.setBackground(shape(0x26FFFFFF,16,0));icon.addView(new Glyph(this,"calculator",Color.WHITE),new LinearLayout.LayoutParams(dp(30),dp(30)));tool.addView(icon,new LinearLayout.LayoutParams(dp(54),dp(54)));tool.setClickable(true);tool.setForeground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF),null,null));tool.setOnClickListener(v->startActivity(new Intent(this,CalculatorActivity.class)));tool.setContentDescription("فتح الحاسبة الذكية");
     }
