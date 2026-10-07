@@ -8,7 +8,7 @@
     <activity android:name=".CalculatorActivity" android:exported="false" />
     <activity android:name=".QuoteActivity" android:exported="false" />
     <activity android:name=".SoftwareActivity" android:exported="false" />
-    <provider android:name=".QuoteProvider" android:authorities="com.amalaei.engineering.quotes" android:exported="false" android:grantUriPermissions="true" />
+    <provider android:name=".QuoteProvider" android:authorities="${applicationId}.quotes" android:exported="false" android:grantUriPermissions="true" />
     <activity android:name=".MainActivity" android:exported="true">
       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
       <intent-filter><action android:name="android.intent.action.SEND" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="text/plain" /></intent-filter>
@@ -19,6 +19,6 @@
     <receiver android:name=".ReminderReceiver" android:exported="false">
       <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /><action android:name="android.intent.action.TIME_SET" /><action android:name="android.intent.action.TIMEZONE_CHANGED" /></intent-filter>
     </receiver>
-    <provider android:name=".PostImageProvider" android:authorities="com.amalaei.engineering.images" android:exported="false" android:grantUriPermissions="true" />
+    <provider android:name=".PostImageProvider" android:authorities="${applicationId}.images" android:exported="false" android:grantUriPermissions="true" />
   </application>
 </manifest>
