@@ -119,6 +119,10 @@ final class Store extends SQLiteOpenHelper {
             db.setTransactionSuccessful();
         } finally { db.endTransaction(); }
     }
+    int refreshContactNames(java.util.Map<String,String> contacts){
+        if(contacts==null||contacts.isEmpty())return 0;ArrayList<JSONObject> leads=query("SELECT id,name,phone FROM leads WHERE phone IS NOT NULL AND phone<>''");SQLiteDatabase db=getWritableDatabase();db.beginTransaction();int named=0;
+        try{for(JSONObject lead:leads){String phone=lead.optString("phone"),display=contacts.get(phone);if(display==null||display.trim().isEmpty())continue;ContentValues values=new ContentValues();values.put("contactName",display);String current=lead.optString("name");if(current.isEmpty()||Analysis.phone(current).equals(phone)){values.put("name",display);named++;}db.update("leads",values,"id=?",new String[]{String.valueOf(lead.optLong("id"))});}db.setTransactionSuccessful();return named;}finally{db.endTransaction();}
+    }
     void beginBatch(){getWritableDatabase().beginTransaction();}
     void commitBatch(){SQLiteDatabase db=getWritableDatabase();db.setTransactionSuccessful();db.endTransaction();}
     void rollbackBatch(){getWritableDatabase().endTransaction();}

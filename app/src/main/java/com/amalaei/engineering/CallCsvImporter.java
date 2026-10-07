@@ -22,7 +22,7 @@ final class CallCsvImporter {
         int name=headerRow>=0?column(first,"name","contact","contactname","displayname","callername","الاسم","جهةالاتصال","اسمالمتصل"):inferName(first,phone);
         int date=headerRow>=0?column(first,"date","time","timestamp","datetime","calldate","starttime","التاريخ","الوقت","تاريخالمكالمة"):inferDate(first,phone);
         if(phone<0)throw new IllegalArgumentException("لم أتعرف على أرقام سعودية داخل الملف. تأكد أن السجل يحتوي أرقامًا تبدأ بـ 05 أو 01 أو +966");
-        int imported=0,created=0,skipped=0;long fallback=System.currentTimeMillis();
+        int imported=0,created=0,skipped=0;long fallback=System.currentTimeMillis();Map<String,String> phoneContacts=PhoneData.contacts(context);
         try(Store store=new Store(context)){
             store.beginBatch();
             try{
@@ -30,7 +30,7 @@ final class CallCsvImporter {
                     ArrayList<String> row=records.get(i);if(empty(row))continue;
                     String normalized=phone<row.size()?phoneValue(row.get(phone)):"";
                     if(normalized.isEmpty()){skipped++;continue;}
-                    String contact=name>=0&&name<row.size()?safe(row.get(name),120):"";
+                    String contact=name>=0&&name<row.size()?safe(row.get(name),120):"";if(contact.isEmpty()||!Analysis.phone(contact).isEmpty())contact=phoneContacts.getOrDefault(normalized,"");
                     long at=date>=0&&date<row.size()?time(row.get(date)):Long.MIN_VALUE;
                     if(at==Long.MIN_VALUE)at=fallback-i;
                     boolean fresh=store.byPhone(normalized).optLong("id")==0;

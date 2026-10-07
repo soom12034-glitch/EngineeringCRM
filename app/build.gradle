@@ -5,7 +5,7 @@ if (keystorePropertiesFile.exists()) keystoreProperties.load(new FileInputStream
 android {
     namespace 'com.amalaei.engineering'
     compileSdk 36
-    defaultConfig { applicationId 'com.soom12034.engineeringcrm'; minSdk 29; targetSdk 36; versionCode 5; versionName '1.2.1' }
+    defaultConfig { applicationId 'com.soom12034.engineeringcrm'; minSdk 29; targetSdk 36; versionCode 6; versionName '1.2.2' }
     signingConfigs {
         release {
             if (keystorePropertiesFile.exists()) {
