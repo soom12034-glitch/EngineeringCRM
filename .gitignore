@@ -8,3 +8,9 @@ captures/
 .cxx/
 __pycache__/
 *.pyc
+*.apk
+*.aab
+*.idsig
+*.jks
+*.keystore
+*.keystore.*
