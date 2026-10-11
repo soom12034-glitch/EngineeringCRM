@@ -15,3 +15,4 @@ __pycache__/
 *.keystore
 *.keystore.*
 keystore.properties
+release-private/

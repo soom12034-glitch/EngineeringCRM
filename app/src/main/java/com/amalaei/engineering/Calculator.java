@@ -9,7 +9,15 @@ final class Calculator {
  private void append(String k){if(expression.length()+k.length()>250)throw new IllegalArgumentException("العملية طويلة جدًا؛ اضغط يساوي للمتابعة");expression+=k;}
  BigDecimal value(){return evaluate(expression.isEmpty()?"0":expression);}
  static String plain(BigDecimal value){if(value.precision()>40||value.abs().compareTo(new BigDecimal("1E30"))>=0)throw new IllegalArgumentException("النتيجة تتجاوز سعة الحاسبة");return value.stripTrailingZeros().toPlainString();}
- static BigDecimal[] vat(BigDecimal value){BigDecimal base=value.setScale(2,RoundingMode.HALF_UP);BigDecimal tax=base.multiply(new BigDecimal("0.15")).setScale(2,RoundingMode.HALF_UP);return new BigDecimal[]{base,tax,base.add(tax)};}
+ static BigDecimal taxRate(String input){try{BigDecimal percent=QuoteMath.number(input);if(percent.compareTo(new BigDecimal("100"))>0)throw new IllegalArgumentException();return percent.stripTrailingZeros();}catch(Exception invalid){throw new IllegalArgumentException("أدخل نسبة ضريبة من 0 إلى 100");}}
+ static BigDecimal[] vat(BigDecimal value){return vat(value,new BigDecimal("15"),false);}
+ static BigDecimal[] vat(BigDecimal value,BigDecimal percent,boolean included){
+  if(percent==null||percent.signum()<0||percent.compareTo(new BigDecimal("100"))>0)throw new IllegalArgumentException("نسبة الضريبة غير صالحة");
+  BigDecimal rate=percent.divide(new BigDecimal("100"),MC),base,tax,total;
+  if(included){total=value.setScale(2,RoundingMode.HALF_UP);base=total.divide(BigDecimal.ONE.add(rate),2,RoundingMode.HALF_UP);tax=total.subtract(base);}
+  else{base=value.setScale(2,RoundingMode.HALF_UP);tax=base.multiply(rate).setScale(2,RoundingMode.HALF_UP);total=base.add(tax);}
+  return new BigDecimal[]{base,tax,total};
+ }
  static String money(BigDecimal value){return String.format(java.util.Locale.US,"%,.2f",value);}
  static BigDecimal evaluate(String text){Parser p=new Parser(text);BigDecimal value=p.sum();if(p.at!=text.length())throw new IllegalArgumentException("أكمل العملية أولًا");plain(value);return value;}
  private static final class Parser {final String text;int at=0;Parser(String s){if(s.length()>250)throw new IllegalArgumentException("العملية طويلة جدًا");text=s;}

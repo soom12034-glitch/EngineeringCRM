@@ -18,11 +18,19 @@ public final class CallCsvImporterTest {
         if(!CallCsvImporter.hasHeader(list("name","phone","date")))throw new AssertionError("header row detected");
         if(CallCsvImporter.hasHeader(list("أحمد","0551234567","07/10/2026 11:00")))throw new AssertionError("data row must not be a header");
         if(CallCsvImporter.column(list("رقم","الهاتف"),"رقم","الهاتف")!=0)throw new AssertionError("exact column match must beat contains match");
+        if(CallCsvImporter.column(list("cached_name","number","date"),"name","cachedname")!=0)throw new AssertionError("Infinix cached name header");
         ArrayList<String> rec=list("أحمد محمد","0551234567","07/10/2026 11:00");
         int phone=CallCsvImporter.inferPhone(rec);
         if(phone!=1)throw new AssertionError("inferPhone");
         if(CallCsvImporter.inferName(rec,phone)!=0)throw new AssertionError("inferName");
         if(CallCsvImporter.inferDate(rec,phone)!=2)throw new AssertionError("inferDate");
+        if(!CallCsvImporter.missingName("عميل غير معرف")||!CallCsvImporter.missingName("Unknown")||CallCsvImporter.missingName("المهندس فادي"))throw new AssertionError("placeholder contact names");
+        String denied=new CallCsvImporter.Result(2,2,1,0,0,0,false).message();
+        if(!denied.contains("إذن جهات الاتصال غير مسموح"))throw new AssertionError("permission diagnostic");
+        String unmatched=new CallCsvImporter.Result(2,2,1,0,0,12,true).message();
+        if(!unmatched.contains("12 جهة اتصال")||!unmatched.contains("لم تتطابق"))throw new AssertionError("unmatched contact diagnostic");
+        String matched=new CallCsvImporter.Result(2,2,1,0,2,12,true).message();
+        if(!matched.contains("مطابقة أسماء 2"))throw new AssertionError("matched contact diagnostic");
         try{CallCsvImporter.parse("name,phone\n\"x,0551234567");throw new AssertionError("unbalanced quotes must throw");}catch(IllegalArgumentException expected){}
         System.out.println("PASS: call CSV time parsing, header detection, column inference and unbalanced quotes.");
     }

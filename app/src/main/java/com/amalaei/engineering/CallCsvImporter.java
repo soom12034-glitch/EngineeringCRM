@@ -7,9 +7,10 @@ import java.util.*;
 
 final class CallCsvImporter {
     static final class Result {
-        final int rows, imported, created, skipped;
-        Result(int rows,int imported,int created,int skipped){this.rows=rows;this.imported=imported;this.created=created;this.skipped=skipped;}
-        String message(){return "اكتمل الاستيراد: "+imported+" مكالمة صالحة، "+created+" عميل جديد، و"+skipped+" صف متجاوز من أصل "+rows+".";}
+        final int rows, imported, created, skipped, named, readableContacts;
+        final boolean contactsPermission;
+        Result(int rows,int imported,int created,int skipped,int named,int readableContacts,boolean contactsPermission){this.rows=rows;this.imported=imported;this.created=created;this.skipped=skipped;this.named=named;this.readableContacts=readableContacts;this.contactsPermission=contactsPermission;}
+        String message(){String base="اكتمل الاستيراد: "+imported+" مكالمة صالحة، "+created+" رقمًا جديدًا للمراجعة، و"+skipped+" صف متجاوز من أصل "+rows+". لا يُعتمد أي رقم كعميل تلقائيًا.";if(named>0)return base+" تمت مطابقة أسماء "+named+" رقمًا من جهات اتصال الهاتف.";if(!contactsPermission)return base+" لم تُقرأ الأسماء لأن إذن جهات الاتصال غير مسموح؛ فعّله من إعدادات الهاتف ثم اختر «تحديث الأسماء من جهات الاتصال».";if(readableContacts==0)return base+" منح الإذن موجود، لكن Android لم يُرجع جهات اتصال قابلة للقراءة. تحقق أن الأسماء محفوظة في تطبيق جهات الاتصال وليست تعريف متصل من الشبكة فقط.";return base+" قرأ التطبيق "+readableContacts+" جهة اتصال، لكن لم تتطابق أرقامها السعودية مع الأرقام المستوردة.";}
     }
 
     static Result run(Context context,String csv) throws Exception {
@@ -19,34 +20,36 @@ final class CallCsvImporter {
         int headerRow=headerRow(records),start=headerRow<0?0:headerRow+1;ArrayList<String> first=records.get(headerRow<0?0:headerRow);
         int phone=headerRow>=0?column(first,"number","phone","mobile","telephone","tel","caller","address","رقم","الهاتف","الجوال","هاتف","رقمالهاتف","رقمالمكالمة","رقمالمتصل"):inferPhone(first);
         if(phone<0)phone=inferPhoneColumn(records,start);
-        int name=headerRow>=0?column(first,"name","contact","contactname","displayname","callername","الاسم","جهةالاتصال","اسمالمتصل"):inferName(first,phone);
+        int name=headerRow>=0?column(first,"name","contact","contactname","displayname","callername","cachedname","cachedcallername","الاسم","جهةالاتصال","اسمالمتصل","الاسمالمخزن"):inferName(first,phone);
         int date=headerRow>=0?column(first,"date","time","timestamp","datetime","calldate","starttime","التاريخ","الوقت","تاريخالمكالمة"):inferDate(first,phone);
         if(phone<0)throw new IllegalArgumentException("لم أتعرف على أرقام سعودية داخل الملف. تأكد أن السجل يحتوي أرقامًا تبدأ بـ 05 أو 01 أو +966");
-        int imported=0,created=0,skipped=0;long fallback=System.currentTimeMillis();Map<String,String> phoneContacts=PhoneData.contacts(context);
+        int imported=0,created=0,skipped=0;long fallback=System.currentTimeMillis();boolean contactsPermission=PhoneData.readable(context);Map<String,String> deviceContacts=PhoneData.contacts(context);int readableContacts=deviceContacts.size();Set<String> matchedContacts=new LinkedHashSet<>(),lookedUp=new HashSet<>();
         try(Store store=new Store(context)){
+            Map<String,String> phoneContacts=new LinkedHashMap<>(store.cachedContactNames());phoneContacts.putAll(deviceContacts);
             store.beginBatch();
             try{
                 for(int i=start;i<records.size();i++){
                     ArrayList<String> row=records.get(i);if(empty(row))continue;
                     String normalized=phone<row.size()?phoneValue(row.get(phone)):"";
                     if(normalized.isEmpty()){skipped++;continue;}
-                    String contact=name>=0&&name<row.size()?safe(row.get(name),120):"";if(contact.isEmpty()||!Analysis.phone(contact).isEmpty())contact=phoneContacts.getOrDefault(normalized,"");
+                    String contact=name>=0&&name<row.size()?safe(row.get(name),120):"";if(missingName(contact)){contact=phoneContacts.getOrDefault(normalized,"");if(contact.isEmpty()&&contactsPermission&&lookedUp.add(normalized)){contact=PhoneData.contact(context,normalized);if(!contact.isEmpty())phoneContacts.put(normalized,contact);}if(!contact.isEmpty())matchedContacts.add(normalized);}
                     long at=date>=0&&date<row.size()?time(row.get(date)):Long.MIN_VALUE;
                     if(at==Long.MIN_VALUE)at=fallback-i;
                     boolean fresh=store.byPhone(normalized).optLong("id")==0;
-                    store.recordCall(normalized,at,contact,AppMode.MODE);
+                    store.recordCall(normalized,at,contact,"");
                     if(fresh)created++;imported++;
                 }
                 store.commitBatch();
             }catch(Exception e){store.rollbackBatch();throw e;}
         }
         if(imported==0)throw new IllegalArgumentException("لا يحتوي الملف أرقامًا سعودية صالحة. يدعم 05 و01 و+966");
-        return new Result(Math.max(0,records.size()-start),imported,created,skipped);
+        return new Result(Math.max(0,records.size()-start),imported,created,skipped,matchedContacts.size(),readableContacts,contactsPermission);
     }
 
     private static String safe(String value,int max){String v=value==null?"":value.trim();return v.length()>max?v.substring(0,max):v;}
+    static boolean missingName(String value){String v=value==null?"":value.trim();if(v.isEmpty()||!phoneValue(v).isEmpty())return true;String k=key(v);return k.equals("unknown")||k.equals("unknowncaller")||k.equals("noname")||k.equals("غيرمعروف")||k.equals("رقمغيرمعروف")||k.equals("عميلغيرمعرف")||k.equals("عميلغيرمسمي");}
     private static boolean empty(ArrayList<String> row){for(String v:row)if(v!=null&&!v.trim().isEmpty())return false;return true;}
-    static boolean hasHeader(ArrayList<String> row){return column(row,"number","phone","mobile","telephone","tel","caller","address","رقم","الهاتف","الجوال","هاتف","رقمالهاتف","رقمالمكالمة","رقمالمتصل")>=0||column(row,"name","contact","contactname","displayname","callername","الاسم","جهةالاتصال","اسمالمتصل")>=0||column(row,"date","time","timestamp","datetime","calldate","starttime","التاريخ","الوقت","تاريخالمكالمة")>=0;}
+    static boolean hasHeader(ArrayList<String> row){return column(row,"number","phone","mobile","telephone","tel","caller","address","رقم","الهاتف","الجوال","هاتف","رقمالهاتف","رقمالمكالمة","رقمالمتصل")>=0||column(row,"name","contact","contactname","displayname","callername","cachedname","cachedcallername","الاسم","جهةالاتصال","اسمالمتصل","الاسمالمخزن")>=0||column(row,"date","time","timestamp","datetime","calldate","starttime","التاريخ","الوقت","تاريخالمكالمة")>=0;}
     static int headerRow(ArrayList<ArrayList<String>> rows){for(int i=0;i<Math.min(10,rows.size());i++)if(hasHeader(rows.get(i)))return i;return -1;}
     static String phoneValue(String value){String direct=Analysis.phone(value);if(!direct.isEmpty())return direct;ArrayList<String> found=Analysis.phones(value==null?"":value);return found.size()==1?found.get(0):"";}
     static int inferPhone(ArrayList<String> row){for(int i=0;i<row.size();i++)if(!phoneValue(row.get(i)).isEmpty())return i;return -1;}

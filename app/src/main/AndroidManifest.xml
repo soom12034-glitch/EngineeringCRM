@@ -2,11 +2,12 @@
   <uses-permission android:name="android.permission.READ_CONTACTS" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-  <application android:label="@string/app_name" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:fullBackupContent="@xml/backup_rules" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:usesCleartextTraffic="false">
+  <application android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/AppTheme" android:allowBackup="false" android:fullBackupContent="@xml/backup_rules" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:usesCleartextTraffic="false">
     <activity android:name=".QuotePreviewActivity" android:exported="false" />
     <activity android:name=".CalculatorActivity" android:exported="false" />
     <activity android:name=".QuoteActivity" android:exported="false" />
     <activity android:name=".SoftwareActivity" android:exported="false" />
+    <activity android:name=".LedgerActivity" android:exported="false" />
     <provider android:name=".QuoteProvider" android:authorities="${applicationId}.quotes" android:exported="false" android:grantUriPermissions="true" />
     <activity android:name=".MainActivity" android:exported="true">
       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>

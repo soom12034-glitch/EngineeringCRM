@@ -21,14 +21,14 @@ final class History {
                 }
                 while(more){more=false;
                     android.net.Uri uri=CallLog.Calls.CONTENT_URI.buildUpon().appendQueryParameter(CallLog.Calls.LIMIT_PARAM_KEY,"200").build();
-                    try(Cursor c=context.getContentResolver().query(uri,new String[]{CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.DATE},"_id>?",new String[]{String.valueOf(checkpoint)},"_id ASC")) {
+                    try(Cursor c=context.getContentResolver().query(uri,new String[]{CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.DATE,CallLog.Calls.CACHED_NAME},"_id>?",new String[]{String.valueOf(checkpoint)},"_id ASC")) {
                         if(c==null)throw new IllegalStateException();int count=0;
-                        while(c.moveToNext()) {String phone=Analysis.phone(c.getString(1));if(!phone.isEmpty()){if(store.byPhone(phone).optLong("id")==0)created++;store.recordCall(phone,c.getLong(2),PhoneData.contact(context,phone),context.getSharedPreferences("settings",0).getString("newBusiness",""));matched++;}checkpoint=c.getLong(0);count++;}
+                        while(c.moveToNext()) {String phone=Analysis.phone(c.getString(1));if(!phone.isEmpty()){if(store.byPhone(phone).optLong("id")==0)created++;String name=c.getString(3);if(CallCsvImporter.missingName(name))name=PhoneData.contact(context,phone);store.recordCall(phone,c.getLong(2),name==null?"":name.trim(),"");matched++;}checkpoint=c.getLong(0);count++;}
                         context.getSharedPreferences("settings",0).edit().putLong("historyId",checkpoint).apply();more=count>=200;
                     }
                 }
             }
-            status(context,"اكتمل الاستيراد: "+created+" عميل جديد، و"+matched+" مكالمة عولجت. لم يلزم إدخال البيانات يدويًا؛ المتكرر دُمج تلقائيًا.");
+            status(context,"اكتمل الاستيراد: "+created+" رقمًا جديدًا للمراجعة، و"+matched+" مكالمة عولجت. لا يصبح الرقم عميلًا إلا بعد اعتماده.");
         } catch(SecurityException e){status(context,"إذن سجل المكالمات غير متاح. أندرويد قد يقيّده حسب المثبّت. لا يتم تجاوز حماية الهاتف.");}
         catch(Exception e){status(context,"توقف استيراد السجل؛ أعد المحاولة لاستكمال آخر موضع محفوظ.");}
     }

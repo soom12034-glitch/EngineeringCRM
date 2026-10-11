@@ -9,11 +9,15 @@ public final class AllTests {
     @Test public void callCsvImporter() { CallCsvImporterTest.main(new String[0]); }
     @Test public void callCsvParser() { CallCsvParserTest.main(new String[0]); }
     @Test public void calculatorScenarios() { CalculatorScenarioTest.main(new String[0]); }
+    @Test public void customerActivities() { CustomerActivityTest.main(new String[0]); }
     @Test public void followUps() { FollowUpsTest.main(new String[0]); }
     @Test public void importAnalysis() { ImportAnalysisTest.main(new String[0]); }
     @Test public void profiles() { ProfilesTest.main(new String[0]); }
+    @Test public void quoteCustomer() throws Exception { QuoteCustomerTest.main(new String[0]); }
     @Test public void quoteMath() { QuoteMathTest.main(new String[0]); }
     @Test public void softwareWork() throws Exception { SoftwareWorkTest.main(new String[0]); }
     @Test public void surveyRequests() { SurveyRequestsTest.main(new String[0]); }
+    @Test public void taxModes() { TaxModesTest.main(new String[0]); }
     @Test public void textDecoder() throws Exception { TextDecoderTest.main(new String[0]); }
+    @Test public void vcardImporter() { VCardImporterTest.main(new String[0]); }
 }
