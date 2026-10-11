@@ -25,6 +25,7 @@ final class Quotation {
 
     static void validate(JSONObject quote)throws Exception{
         if(!quote.optString("business","survey").equals("survey"))throw new IllegalArgumentException("النموذج خاص بالمساحة");
+        if(!QuoteStatus.valid(quote.optString("status",QuoteStatus.DRAFT)))throw new IllegalArgumentException("حالة العرض غير صالحة");
         if(quote.optString("customer").trim().isEmpty()||quote.optString("number").trim().isEmpty())throw new IllegalArgumentException("أدخل العميل ورقم العرض");
         for(String key:new String[]{"customer","number","customerVat","customerPhone","customerAddress"})if(quote.optString(key).length()>(key.equals("customerAddress")?110:80))throw new IllegalArgumentException("اختصر بيانات العميل لتناسب النموذج");
         if(quote.optString("notes").length()>240)throw new IllegalArgumentException("اختصر ملاحظات العرض إلى 240 حرفًا");
