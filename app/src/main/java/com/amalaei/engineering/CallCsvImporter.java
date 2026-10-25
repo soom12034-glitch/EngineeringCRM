@@ -65,7 +65,7 @@ static long time(String raw){
         String text=latin(raw==null?"":raw).trim();if(text.isEmpty())return Long.MIN_VALUE;
         if(text.matches("[0-9]+")){
             try{long n=Long.parseLong(text);
-                if(n>=100000000000L){long year=Instant.ofEpochMilli(n).atZone(ZoneId.systemDefault()).getYear();if(year>=2000&&year<=2100)return n;}
+                if(n>=100000000000L){long year=Instant.ofEpochMilli(n).atZone(ZoneId.systemDefault()).getYear();if(year>=2000&&year<=2100)return n;} else if(n>=1000000000L&&n<100000000000L){long year=Instant.ofEpochSecond(n).atZone(ZoneId.systemDefault()).getYear();if(year>=2000&&year<=2100)return n*1000L;}
                 else if(n>=1000000000L)return n*1000L;
                 else if(n>=20000&&n<100000)return LocalDate.of(1899,12,30).plusDays(n).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
             }catch(Exception ignored){}

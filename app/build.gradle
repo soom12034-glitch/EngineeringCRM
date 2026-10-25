@@ -5,7 +5,7 @@ if (keystorePropertiesFile.exists()) keystoreProperties.load(new FileInputStream
 android {
     namespace 'com.amalaei.engineering'
     compileSdk 36
-    defaultConfig { applicationId 'com.soom12034.engineeringcrm'; minSdk 29; targetSdk 36; versionCode 6; versionName '1.2.2' }
+    defaultConfig { applicationId 'com.soom12034.engineeringcrm'; minSdk 29; targetSdk 36; versionCode 12; versionName '1.4.12' }
     signingConfigs {
         release {
             if (keystorePropertiesFile.exists()) {
@@ -15,22 +15,31 @@ android {
                 keyPassword keystoreProperties['keyPassword']
             }
         }
+        upload {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties['uploadStoreFile'])
+                storePassword keystoreProperties['uploadStorePassword']
+                keyAlias keystoreProperties['uploadKeyAlias']
+                keyPassword keystoreProperties['uploadKeyPassword']
+            }
+        }
     }
     buildTypes {
         release {
-            if (keystorePropertiesFile.exists()) signingConfig signingConfigs.release
         }
     }
     flavorDimensions 'distribution'
     productFlavors {
         play {
             dimension 'distribution'
+            signingConfig signingConfigs.upload
             buildConfigField 'boolean', 'DIRECT_CALL_LOG', 'false'
         }
         direct {
             dimension 'distribution'
             applicationIdSuffix '.direct'
             versionNameSuffix '-direct'
+            signingConfig signingConfigs.release
             buildConfigField 'boolean', 'DIRECT_CALL_LOG', 'true'
         }
     }

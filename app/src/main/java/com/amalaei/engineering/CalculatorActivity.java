@@ -1,6 +1,6 @@
 package com.amalaei.engineering;
 import android.app.Activity;import android.os.Bundle;import android.widget.*;import android.graphics.Typeface;import android.graphics.Color;import android.graphics.drawable.GradientDrawable;import android.view.View;import android.view.Gravity;import java.math.BigDecimal;
-public final class CalculatorActivity extends Activity {
+public final class CalculatorActivity extends BaseSecureActivity {
  private final Calculator calculator=new Calculator();private TextView expression,result,baseValue,taxValue,totalValue,status;private Typeface arabic,numbers;private LinearLayout body;private final int INK=0xff102a43,ACCENT=0xff0f766e;
  private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
  private GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}

@@ -35,7 +35,7 @@ final class Reminders {
                 String date=lead.optString("followUp"),time=lead.optString("followTime","09:00"),key=FollowUps.key(date,time);
                 if(!FollowUps.pending(lead.optInt("stage"),date,time,lead.optString("lastNotified")))continue;
                 try{if(FollowUps.at(date,time)>System.currentTimeMillis())continue;}catch(Exception invalid){continue;}
-                long id=lead.optLong("id");Intent open=new Intent(c,MainActivity.class).putExtra("openLead",id).setAction("com.amalaei.engineering.OPEN."+id);
+                long id=lead.optLong("id");Intent open=new Intent(c,MainActivity.class).putExtra("openLead",id).setAction("com.amalaei.engineering.OPEN."+id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 PendingIntent click=PendingIntent.getActivity(c,(int)id,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
                 Notification notice=new Notification.Builder(c,"followups").setSmallIcon(R.drawable.ic_notification).setContentTitle("متابعة: "+lead.optString("name")).setContentText((lead.optString("business").equals("software")?"البرامج والتطبيقات":SurveyRequests.label(lead.optString("requestType","sales")))+" • "+date+" "+time).setContentIntent(click).setAutoCancel(true).setVisibility(Notification.VISIBILITY_PRIVATE).build();
                 manager.notify("lead",(int)id,notice);
