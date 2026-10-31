@@ -1,95 +1,433 @@
 package com.amalaei.engineering;
 
-import android.app.*;
-import android.os.Bundle;
-import android.text.InputType;
-import android.widget.*;
-import android.graphics.*;
+import android.app.Activity;
+import android.content.DialogInterface;
+import android.content.res.ColorStateList;
+import android.graphics.Insets;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.view.*;
+import android.graphics.drawable.RippleDrawable;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.View;
+import android.view.WindowInsets;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import java.math.BigDecimal;
 
 public final class CalculatorActivity extends BaseSecureActivity {
-    private final Calculator calculator=new Calculator();
-    private TextView expression,result,status,subtitle,screenCaption,outputCaption,screenTaxLine;
-    private Button addMode,includedMode,rateButton;
-    private Typeface arabic,numbers;
+    private Button addMode;
+    private Typeface arabic;
     private LinearLayout body;
-    private BigDecimal taxPercent=new BigDecimal("15");
-    private boolean includedTax=false;
-    private final int INK=0xff102a43,ACCENT=0xff0f766e,MUTED=0xff8790a3,BG=0xfff5f7fa;
+    private TextView expression;
+    private Button includedMode;
+    private Typeface numbers;
+    private TextView outputCaption;
+    private Button rateButton;
+    private TextView result;
+    private TextView screenCaption;
+    private TextView screenTaxLine;
+    private TextView status;
+    private TextView subtitle;
+    private final Calculator calculator = new Calculator();
+    private BigDecimal taxPercent = new BigDecimal("15");
+    private boolean includedTax = false;
+    private final int INK = -15717821;
+    private final int ACCENT = SectionColors.dark("calculator");
+    private final int MUTED = -10192758;
+    private final int BG = -788486;
 
-    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
-    private GradientDrawable shape(int color,int radius){GradientDrawable drawable=new GradientDrawable();drawable.setColor(color);drawable.setCornerRadius(dp(radius));return drawable;}
-
-    private TextView text(String value,int size,int color,boolean numeric){
-        TextView view=new TextView(this);view.setText(value);view.setTextSize(size);view.setTextColor(color);view.setTypeface(numeric?numbers:arabic);view.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);view.setTextDirection(numeric?View.TEXT_DIRECTION_LTR:View.TEXT_DIRECTION_RTL);
-        if(numeric){view.setSingleLine(true);view.setFontFeatureSettings("tnum");}return view;
+    private void act(String str) {
+        try {
+            UiTheme.feedback(this.body);
+            this.calculator.press(str);
+            display();
+        } catch (IllegalArgumentException e) {
+            this.status.setTextColor(-4371881);
+            this.status.setText(e.getMessage());
+        }
     }
 
-    @Override public void onCreate(Bundle state){
-        super.onCreate(state);arabic=Typeface.createFromAsset(getAssets(),"fonts/Cairo.ttf");numbers=Typeface.create("sans-serif-medium",Typeface.NORMAL);
-        String savedRate=state==null?getPreferences(0).getString("taxPercent","15"):state.getString("taxPercent","15");try{taxPercent=Calculator.taxRate(savedRate);}catch(Exception ignored){taxPercent=new BigDecimal("15");}
-        includedTax=state!=null&&state.getBoolean("includedTax",false);if(state!=null)calculator.restore(state.getString("expression",""),state.getBoolean("finished",false));
-        getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);scroll.setVerticalScrollBarEnabled(true);scroll.setScrollbarFadingEnabled(false);scroll.setSmoothScrollingEnabled(true);
-        body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setBackgroundColor(BG);scroll.addView(body,new ScrollView.LayoutParams(-1,-2));setContentView(scroll);
-        body.setOnApplyWindowInsetsListener((view,insets)->{int top,bottom;if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars());top=bars.top;bottom=bars.bottom;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();}view.setPadding(dp(18),top+dp(12),dp(18),bottom+dp(96));return insets;});
-
-        LinearLayout header=new LinearLayout(this);header.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);header.setGravity(Gravity.CENTER_VERTICAL);LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);titles.addView(text("حاسبة الأسعار",23,INK,false));subtitle=text("",12,MUTED,false);titles.addView(subtitle);header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));Button back=key("رجوع","backscreen");header.addView(back,new LinearLayout.LayoutParams(dp(68),dp(44)));back.setOnClickListener(view->finish());LinearLayout.LayoutParams headerParams=new LinearLayout.LayoutParams(-1,-2);headerParams.setMargins(0,0,0,dp(16));body.addView(header,headerParams);
-
-        LinearLayout screen=new LinearLayout(this);screen.setOrientation(LinearLayout.VERTICAL);screen.setPadding(dp(20),dp(14),dp(20),dp(14));screen.setBackground(shape(INK,24));screen.setElevation(dp(3));body.addView(screen,new LinearLayout.LayoutParams(-1,-2));
-        screenCaption=text("المبلغ المدخل / العملية  ·  SAR",11,0xffccfbf1,false);screen.addView(screenCaption);
-        expression=text("0",18,0xff99f6e4,true);expression.setHorizontalScrollBarEnabled(false);expression.setAutoSizeTextTypeUniformWithConfiguration(13,18,1,android.util.TypedValue.COMPLEX_UNIT_SP);screen.addView(expression,new LinearLayout.LayoutParams(-1,dp(30)));
-        View screenDivider=new View(this);screenDivider.setBackgroundColor(0x335eead4);LinearLayout.LayoutParams screenDividerParams=new LinearLayout.LayoutParams(-1,dp(1));screenDividerParams.setMargins(0,dp(3),0,dp(5));screen.addView(screenDivider,screenDividerParams);
-        outputCaption=text("",11,0xffccfbf1,false);screen.addView(outputCaption);
-        result=text("0.00",38,Color.WHITE,true);result.setAutoSizeTextTypeUniformWithConfiguration(21,38,1,android.util.TypedValue.COMPLEX_UNIT_SP);result.setTextIsSelectable(true);screen.addView(result,new LinearLayout.LayoutParams(-1,dp(54)));
-        screenTaxLine=text("",11,0xff99f6e4,false);screenTaxLine.setSingleLine(true);screenTaxLine.setAutoSizeTextTypeUniformWithConfiguration(9,11,1,android.util.TypedValue.COMPLEX_UNIT_SP);screen.addView(screenTaxLine,new LinearLayout.LayoutParams(-1,dp(24)));
-
-        keypadRow(new String[]{"7","8","9","÷"},new String[]{"7","8","9","/"});
-        keypadRow(new String[]{"4","5","6","×"},new String[]{"4","5","6","*"});
-        keypadRow(new String[]{"1","2","3","−"},new String[]{"1","2","3","-"});
-        keypadRow(new String[]{"0",".","=","+"},new String[]{"0",".","=","+"});
-        keypadRow(new String[]{"AC","⌫","±"},new String[]{"C","back","sign"});
-
-        TextView modeHeading=text("إعدادات الضريبة",12,MUTED,false);modeHeading.setPadding(0,dp(14),0,dp(5));body.addView(modeHeading);
-        LinearLayout modes=new LinearLayout(this);modes.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);body.addView(modes,new LinearLayout.LayoutParams(-1,dp(58)));
-        addMode=modeButton("إضافة الضريبة");includedMode=modeButton("المبلغ شامل الضريبة");LinearLayout.LayoutParams modeParams=new LinearLayout.LayoutParams(0,-1,1);modeParams.setMargins(dp(3),0,dp(3),0);modes.addView(addMode,modeParams);modes.addView(includedMode,modeParams);addMode.setOnClickListener(view->{includedTax=false;display();});includedMode.setOnClickListener(view->{includedTax=true;display();});
-        rateButton=key("","tax");LinearLayout.LayoutParams rateParams=new LinearLayout.LayoutParams(-1,dp(50));rateParams.setMargins(dp(3),dp(8),dp(3),dp(8));body.addView(rateButton,rateParams);rateButton.setOnClickListener(view->chooseRate());
-
-        status=text("",12,0xff8992a4,false);status.setMinHeight(dp(27));body.addView(status);
-        TextView note=text("في وضع «المبلغ شامل الضريبة» يستخرج التطبيق الصافي والضريبة الصحيحة من الإجمالي؛ مثال 1000 شامل 15% = صافي 869.57 وضريبة 130.43.",11,MUTED,false);note.setSingleLine(false);note.setPadding(0,dp(10),0,dp(18));body.addView(note);display();
+    private void chooseRate() {
+        LinearLayout linearLayout = new LinearLayout(this);
+        linearLayout.setOrientation(1);
+        linearLayout.setPadding(dp(20), dp(8), dp(20), 0);
+        TextView textViewText = text("أدخل النسبة من 0 إلى 100، ويمكن استخدام نسبة عشرية مثل 14.5", 13, -15717821, false);
+        textViewText.setSingleLine(false);
+        linearLayout.addView(textViewText);
+        final EditText editText = new EditText(this);
+        editText.setTypeface(this.numbers);
+        editText.setText(Calculator.plain(this.taxPercent));
+        editText.setSelectAllOnFocus(true);
+        editText.setTextDirection(3);
+        editText.setGravity(8388611);
+        editText.setInputType(8194);
+        linearLayout.addView(editText, new LinearLayout.LayoutParams(-1, dp(55)));
+        new FluentDialog(this).setTitle("نسبة الضريبة").setView(linearLayout).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("حفظ", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                CalculatorActivity.this.lambda$chooseRate$6(editText, dialogInterface, i);
+            }
+        }).show();
     }
 
-    private Button modeButton(String label){Button button=key(label,"tax");button.setTextSize(13);return button;}
-
-    private void styleMode(Button button,boolean selected){button.setTextColor(selected?Color.WHITE:ACCENT);button.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x220f766e),shape(selected?ACCENT:0xffdff7f3,16),null));}
-
-    private Button key(String label,String kind){
-        boolean digit=kind.matches("[0-9.]"),primary=kind.equals("="),tax=kind.equals("tax");int color=tax?0xffdff7f3:primary?ACCENT:digit?Color.WHITE:0xffe8f1f3;Button button=new Button(this);button.setText(label);button.setTextSize(tax?15:kind.equals("backscreen")?13:kind.equals("C")?20:29);button.setTypeface(tax||kind.equals("backscreen")?arabic:numbers);button.setTextColor(primary?Color.WHITE:tax?ACCENT:digit?INK:ACCENT);button.setAllCaps(false);button.setMinHeight(0);button.setMinimumHeight(0);button.setPadding(dp(4),0,dp(4),0);button.setStateListAnimator(null);button.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x220f766e),shape(color,18),null));button.setContentDescription(kind.equals("back")?"حذف آخر رقم":kind.equals("C")?"مسح العملية":label);return button;
+    private void display() {
+        BigDecimal bigDecimalEvaluate;
+        boolean z;
+        String str;
+        String strPercent = percent();
+        this.subtitle.setText((this.includedTax ? "استخراج الضريبة من الإجمالي" : "إضافة الضريبة إلى الصافي") + " • " + strPercent);
+        this.screenCaption.setText("المبلغ المدخل / العملية  ·  SAR");
+        this.outputCaption.setText(this.includedTax ? "الصافي بعد استخراج الضريبة" : "الإجمالي شامل الضريبة");
+        this.rateButton.setText(AppLanguage.text(this, "نسبة الضريبة • ", "Tax rate • ") + strPercent);
+        styleMode(this.addMode, !this.includedTax);
+        styleMode(this.includedMode, this.includedTax);
+        String strExpression = this.calculator.expression();
+        String str2 = "0";
+        this.expression.setText(strExpression.isEmpty() ? "0" : strExpression.replace('*', (char) 215).replace('/', (char) 247));
+        try {
+            try {
+                bigDecimalEvaluate = this.calculator.value();
+                z = false;
+            } catch (IllegalArgumentException e) {
+                if (!"أكمل العملية أولًا".equals(e.getMessage())) {
+                    throw e;
+                }
+                while (!strExpression.isEmpty() && "+*/-".indexOf(strExpression.charAt(strExpression.length() - 1)) >= 0) {
+                    strExpression = strExpression.substring(0, strExpression.length() - 1);
+                }
+                if (!strExpression.isEmpty()) {
+                    str2 = strExpression;
+                }
+                bigDecimalEvaluate = Calculator.evaluate(str2);
+                z = true;
+            }
+            BigDecimal[] bigDecimalArrVat = Calculator.vat(bigDecimalEvaluate, this.taxPercent, this.includedTax);
+            this.result.setText(Calculator.money(this.includedTax ? bigDecimalArrVat[0] : bigDecimalArrVat[2]));
+            this.screenTaxLine.setText("قيمة الضريبة " + strPercent + "  •  " + Calculator.money(bigDecimalArrVat[1]) + " SAR");
+            this.status.setTextColor(-7761244);
+            TextView textView = this.status;
+            if (z) {
+                str = "أدخل العدد التالي • النتيجة لآخر تعبير مكتمل";
+            } else {
+                str = this.includedTax ? "الصافي بعد خصم الضريبة من الإجمالي" : "الإجمالي بعد إضافة الضريبة";
+            }
+            textView.setText(str);
+        } catch (IllegalArgumentException e2) {
+            this.result.setText("—");
+            this.screenTaxLine.setText("تعذر حساب الضريبة");
+            this.status.setTextColor(-4371881);
+            this.status.setText(e2.getMessage());
+        }
     }
 
-    private void keypadRow(String[] labels,String[] keys){LinearLayout row=new LinearLayout(this);row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);LinearLayout.LayoutParams rowParams=new LinearLayout.LayoutParams(-1,dp(58));rowParams.setMargins(0,dp(3),0,dp(3));body.addView(row,rowParams);for(int i=0;i<labels.length;i++){String kind=keys[i];Button button=key(labels[i],kind);LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-1,1);params.setMargins(dp(3),0,dp(3),0);row.addView(button,params);button.setOnClickListener(view->act(kind));}}
-
-    private String percent(){return Calculator.plain(taxPercent)+"%";}
-
-    private void chooseRate(){
-        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(20),dp(8),dp(20),0);TextView hint=text("أدخل النسبة من 0 إلى 100، ويمكن استخدام نسبة عشرية مثل 14.5",13,INK,false);hint.setSingleLine(false);form.addView(hint);EditText input=new EditText(this);input.setTypeface(numbers);input.setText(Calculator.plain(taxPercent));input.setSelectAllOnFocus(true);input.setTextDirection(View.TEXT_DIRECTION_LTR);input.setGravity(Gravity.START);input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);form.addView(input,new LinearLayout.LayoutParams(-1,dp(55)));
-        new AlertDialog.Builder(this).setTitle("نسبة الضريبة").setView(form).setNegativeButton("إلغاء",null).setPositiveButton("حفظ",(dialog,which)->{try{taxPercent=Calculator.taxRate(input.getText().toString());getPreferences(0).edit().putString("taxPercent",Calculator.plain(taxPercent)).apply();display();}catch(IllegalArgumentException invalid){status.setTextColor(0xffbd4a57);status.setText(invalid.getMessage());}}).show();
+    private int dp(int i) {
+        return Math.round(i * getResources().getDisplayMetrics().density);
     }
 
-    private void act(String key){try{calculator.press(key);display();}catch(IllegalArgumentException error){status.setTextColor(0xffbd4a57);status.setText(error.getMessage());}}
-
-    private void display(){
-        String rate=percent();subtitle.setText((includedTax?"استخراج الضريبة من الإجمالي":"إضافة الضريبة إلى الصافي")+" • "+rate);screenCaption.setText("المبلغ المدخل / العملية  ·  SAR");outputCaption.setText(includedTax?"الصافي بعد استخراج الضريبة":"الإجمالي شامل الضريبة");rateButton.setText("تغيير نسبة الضريبة  •  "+rate);styleMode(addMode,!includedTax);styleMode(includedMode,includedTax);
-        String entered=calculator.expression();expression.setText(entered.isEmpty()?"0":entered.replace('*','×').replace('/','÷'));
-        try{
-            BigDecimal value;boolean pending=false;try{value=calculator.value();}catch(IllegalArgumentException incomplete){if(!"أكمل العملية أولًا".equals(incomplete.getMessage()))throw incomplete;String prefix=entered;while(!prefix.isEmpty()&&"+*/-".indexOf(prefix.charAt(prefix.length()-1))>=0)prefix=prefix.substring(0,prefix.length()-1);value=Calculator.evaluate(prefix.isEmpty()?"0":prefix);pending=true;}
-            BigDecimal[] values=Calculator.vat(value,taxPercent,includedTax);BigDecimal output=includedTax?values[0]:values[2];result.setText(Calculator.money(output));screenTaxLine.setText("قيمة الضريبة "+rate+"  •  "+Calculator.money(values[1])+" SAR");status.setTextColor(0xff8992a4);status.setText(pending?"أدخل العدد التالي • النتيجة لآخر تعبير مكتمل":includedTax?"الصافي بعد خصم الضريبة من الإجمالي":"الإجمالي بعد إضافة الضريبة");
-        }catch(IllegalArgumentException error){result.setText("—");screenTaxLine.setText("تعذر حساب الضريبة");status.setTextColor(0xffbd4a57);status.setText(error.getMessage());}
+    private Button key(String str, String str2) {
+        float f;
+        int i;
+        boolean zMatches = str2.matches("[0-9.]");
+        boolean zEquals = str2.equals("=");
+        boolean zEquals2 = str2.equals("tax");
+        Button button = new Button(this);
+        button.setText(str);
+        if (zEquals2) {
+            f = 15.0f;
+        } else if (str2.equals("backscreen")) {
+            f = 13.0f;
+        } else {
+            f = str2.equals("C") ? 20.0f : 29.0f;
+        }
+        button.setTextSize(f);
+        button.setTypeface((zEquals2 || str2.equals("backscreen")) ? this.arabic : this.numbers);
+        if (zEquals) {
+            i = -1;
+        } else {
+            i = (!zEquals2 && zMatches) ? -15717821 : this.ACCENT;
+        }
+        button.setTextColor(i);
+        button.setAllCaps(false);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setPadding(dp(4), 0, dp(4), 0);
+        button.setStateListAnimator(null);
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(571438702), UiTheme.surface(this, zEquals, 14), null));
+        if (str2.equals("back")) {
+            str = "حذف آخر رقم";
+        } else if (str2.equals("C")) {
+            str = "مسح العملية";
+        }
+        button.setContentDescription(str);
+        UiTheme.motion(button);
+        button.setSoundEffectsEnabled(false);
+        return button;
     }
 
-    @Override public void onPostCreate(Bundle state){super.onPostCreate(state);AppLanguage.apply(this);AppLanguage.watch(this);}
-    @Override protected void onSaveInstanceState(Bundle state){state.putString("expression",calculator.expression());state.putBoolean("finished",calculator.finished());state.putString("taxPercent",Calculator.plain(taxPercent));state.putBoolean("includedTax",includedTax);super.onSaveInstanceState(state);}
+    private void keypadRow(String[] strArr, String[] strArr2) {
+        LinearLayout linearLayout = new LinearLayout(this);
+        linearLayout.setLayoutDirection(0);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, dp(58));
+        layoutParams.setMargins(0, dp(3), 0, dp(3));
+        this.body.addView(linearLayout, layoutParams);
+        for (int i = 0; i < strArr.length; i++) {
+            final String str = strArr2[i];
+            Button buttonKey = key(strArr[i], str);
+            LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(0, -1, 1.0f);
+            layoutParams2.setMargins(dp(3), 0, dp(3), 0);
+            linearLayout.addView(buttonKey, layoutParams2);
+            buttonKey.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public final void onClick(View view) {
+                    CalculatorActivity.this.lambda$keypadRow$5(str, view);
+                }
+            });
+        }
+    }
+
+    public /* synthetic */ void lambda$chooseRate$6(EditText editText, DialogInterface dialogInterface, int i) {
+        try {
+            this.taxPercent = Calculator.taxRate(editText.getText().toString());
+            getPreferences(0).edit().putString("taxPercent", Calculator.plain(this.taxPercent)).apply();
+            display();
+        } catch (IllegalArgumentException e) {
+            this.status.setTextColor(-4371881);
+            this.status.setText(e.getMessage());
+        }
+    }
+
+    public /* synthetic */ void lambda$keypadRow$5(String str, View view) {
+        act(str);
+    }
+
+    public /* synthetic */ WindowInsets lambda$onCreate$0(View view, WindowInsets windowInsets) {
+        int systemWindowInsetTop;
+        int systemWindowInsetBottom;
+        if (Build.VERSION.SDK_INT >= 30) {
+            Insets insets = windowInsets.getInsets(WindowInsets.Type.systemBars());
+            systemWindowInsetTop = insets.top;
+            systemWindowInsetBottom = insets.bottom;
+        } else {
+            systemWindowInsetTop = windowInsets.getSystemWindowInsetTop();
+            systemWindowInsetBottom = windowInsets.getSystemWindowInsetBottom();
+        }
+        view.setPadding(dp(18), systemWindowInsetTop + dp(12), dp(18), systemWindowInsetBottom + dp(96));
+        return windowInsets;
+    }
+
+    public /* synthetic */ void lambda$onCreate$1(View view) {
+        finish();
+    }
+
+    public /* synthetic */ void lambda$onCreate$2(View view) {
+        this.includedTax = false;
+        display();
+    }
+
+    public /* synthetic */ void lambda$onCreate$3(View view) {
+        this.includedTax = true;
+        display();
+    }
+
+    public /* synthetic */ void lambda$onCreate$4(View view) {
+        chooseRate();
+    }
+
+    private Button modeButton(String str) {
+        Button buttonKey = key(str, "tax");
+        buttonKey.setTextSize(13.0f);
+        return buttonKey;
+    }
+
+    private String percent() {
+        return Calculator.plain(this.taxPercent) + "%";
+    }
+
+    private GradientDrawable shape(int i, int i2) {
+        GradientDrawable gradientDrawable = new GradientDrawable();
+        gradientDrawable.setColor(i);
+        gradientDrawable.setCornerRadius(dp(i2));
+        return gradientDrawable;
+    }
+
+    private void styleMode(Button button, boolean z) {
+        button.setTextColor(z ? -1 : this.ACCENT);
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(571438702), shape(z ? this.ACCENT : SectionColors.tint("calculator"), 16), null));
+    }
+
+    private TextView text(String str, int i, int i2, boolean z) {
+        TextView textView = new TextView(this);
+        textView.setText(str);
+        textView.setTextSize(i);
+        textView.setTextColor(i2);
+        textView.setTypeface(z ? this.numbers : this.arabic);
+        textView.setGravity(8388629);
+        textView.setTextDirection(z ? 3 : 4);
+        if (z) {
+            textView.setSingleLine(true);
+            textView.setFontFeatureSettings("tnum");
+        }
+        return textView;
+    }
+
+    @Override
+    public void onCreate(Bundle bundle) {
+        super.onCreate(bundle);
+        this.arabic = Typeface.createFromAsset(getAssets(), "fonts/Cairo.ttf");
+        this.numbers = Typeface.create("sans-serif-medium", 0);
+        try {
+            this.taxPercent = Calculator.taxRate(bundle == null ? getPreferences(0).getString("taxPercent", "15") : bundle.getString("taxPercent", "15"));
+        } catch (Exception unused) {
+            this.taxPercent = new BigDecimal("15");
+        }
+        this.includedTax = bundle != null && bundle.getBoolean("includedTax", false);
+        if (bundle != null) {
+            this.calculator.restore(bundle.getString("expression", ""), bundle.getBoolean("finished", false));
+        }
+        getWindow().setStatusBarColor(-788486);
+        getWindow().setNavigationBarColor(-788486);
+        getWindow().getDecorView().setSystemUiVisibility(8208);
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.setClipToPadding(false);
+        scrollView.setVerticalScrollBarEnabled(true);
+        scrollView.setScrollbarFadingEnabled(false);
+        scrollView.setSmoothScrollingEnabled(true);
+        LinearLayout linearLayout = new LinearLayout(this);
+        this.body = linearLayout;
+        linearLayout.setOrientation(1);
+        this.body.setBackgroundColor(-788486);
+        scrollView.addView(this.body, new FrameLayout.LayoutParams(-1, -2));
+        setContentView(scrollView);
+        this.body.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public final WindowInsets onApplyWindowInsets(View view, WindowInsets windowInsets) {
+                return CalculatorActivity.this.lambda$onCreate$0(view, windowInsets);
+            }
+        });
+        LinearLayout linearLayout2 = new LinearLayout(this);
+        linearLayout2.setLayoutDirection(AppLanguage.direction(this));
+        linearLayout2.setGravity(16);
+        LinearLayout linearLayout3 = new LinearLayout(this);
+        linearLayout3.setOrientation(1);
+        linearLayout3.addView(text("حاسبة الأسعار", 23, -15717821, false));
+        TextView textViewText = text("", 12, -10192758, false);
+        this.subtitle = textViewText;
+        linearLayout3.addView(textViewText);
+        linearLayout2.addView(linearLayout3, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        Button buttonKey = key("رجوع", "backscreen");
+        linearLayout2.addView(buttonKey, new LinearLayout.LayoutParams(dp(68), dp(44)));
+        buttonKey.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                CalculatorActivity.this.lambda$onCreate$1(view);
+            }
+        });
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
+        layoutParams.setMargins(0, 0, 0, dp(16));
+        this.body.addView(linearLayout2, layoutParams);
+        UiTheme.header(this.body, AppLanguage.text(this, "الحاسبة", "Calculator"), "calculator");
+        LinearLayout linearLayout4 = new LinearLayout(this);
+        linearLayout4.setOrientation(1);
+        linearLayout4.setPadding(dp(20), dp(14), dp(20), dp(14));
+        linearLayout4.setBackground(UiTheme.surface(this, true, 24));
+        linearLayout4.setElevation(dp(3));
+        this.body.addView(linearLayout4, new LinearLayout.LayoutParams(-1, -2));
+        TextView textViewText2 = text("المبلغ المدخل / العملية  ·  SAR", 11, -3343375, false);
+        this.screenCaption = textViewText2;
+        linearLayout4.addView(textViewText2);
+        TextView textViewText3 = text("0", 18, -6687004, true);
+        this.expression = textViewText3;
+        textViewText3.setHorizontalScrollBarEnabled(false);
+        this.expression.setAutoSizeTextTypeUniformWithConfiguration(13, 18, 1, 2);
+        linearLayout4.addView(this.expression, new LinearLayout.LayoutParams(-1, dp(30)));
+        View view = new View(this);
+        view.setBackgroundColor(861858516);
+        LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(-1, dp(1));
+        layoutParams2.setMargins(0, dp(3), 0, dp(5));
+        linearLayout4.addView(view, layoutParams2);
+        TextView textViewText4 = text("", 11, -3343375, false);
+        this.outputCaption = textViewText4;
+        linearLayout4.addView(textViewText4);
+        TextView textViewText5 = text("0.00", 38, -1, true);
+        this.result = textViewText5;
+        textViewText5.setAutoSizeTextTypeUniformWithConfiguration(21, 38, 1, 2);
+        this.result.setTextIsSelectable(true);
+        linearLayout4.addView(this.result, new LinearLayout.LayoutParams(-1, dp(54)));
+        TextView textViewText6 = text("", 11, -6687004, false);
+        this.screenTaxLine = textViewText6;
+        textViewText6.setSingleLine(true);
+        this.screenTaxLine.setAutoSizeTextTypeUniformWithConfiguration(9, 11, 1, 2);
+        linearLayout4.addView(this.screenTaxLine, new LinearLayout.LayoutParams(-1, dp(24)));
+        keypadRow(new String[]{"7", "8", "9", "÷"}, new String[]{"7", "8", "9", "/"});
+        keypadRow(new String[]{"4", "5", "6", "×"}, new String[]{"4", "5", "6", "*"});
+        keypadRow(new String[]{"1", "2", "3", "−"}, new String[]{"1", "2", "3", "-"});
+        keypadRow(new String[]{"0", ".", "=", "+"}, new String[]{"0", ".", "=", "+"});
+        keypadRow(new String[]{"AC", "⌫", "±"}, new String[]{"C", "back", "sign"});
+        UiTheme.enter(this.body);
+        TextView textViewText7 = text("إعدادات الضريبة", 12, -10192758, false);
+        textViewText7.setPadding(0, dp(14), 0, dp(5));
+        this.body.addView(textViewText7);
+        LinearLayout linearLayout5 = new LinearLayout(this);
+        linearLayout5.setLayoutDirection(1);
+        this.body.addView(linearLayout5, new LinearLayout.LayoutParams(-1, dp(58)));
+        this.addMode = modeButton("إضافة الضريبة");
+        this.includedMode = modeButton("المبلغ شامل الضريبة");
+        LinearLayout.LayoutParams layoutParams3 = new LinearLayout.LayoutParams(0, -1, 1.0f);
+        layoutParams3.setMargins(dp(3), 0, dp(3), 0);
+        linearLayout5.addView(this.addMode, layoutParams3);
+        linearLayout5.addView(this.includedMode, layoutParams3);
+        this.addMode.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view2) {
+                CalculatorActivity.this.lambda$onCreate$2(view2);
+            }
+        });
+        this.includedMode.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view2) {
+                CalculatorActivity.this.lambda$onCreate$3(view2);
+            }
+        });
+        this.rateButton = key("", "tax");
+        LinearLayout.LayoutParams layoutParams4 = new LinearLayout.LayoutParams(-1, dp(50));
+        layoutParams4.setMargins(dp(3), dp(8), dp(3), dp(8));
+        this.body.addView(this.rateButton, layoutParams4);
+        this.rateButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view2) {
+                CalculatorActivity.this.lambda$onCreate$4(view2);
+            }
+        });
+        TextView textViewText8 = text("", 12, -7761244, false);
+        this.status = textViewText8;
+        textViewText8.setMinHeight(dp(27));
+        this.body.addView(this.status);
+        TextView textViewText9 = text("في وضع «المبلغ شامل الضريبة» يستخرج التطبيق الصافي والضريبة الصحيحة من الإجمالي؛ مثال 1000 شامل 15% = صافي 869.57 وضريبة 130.43.", 11, -10192758, false);
+        textViewText9.setSingleLine(false);
+        textViewText9.setPadding(0, dp(10), 0, dp(18));
+        this.body.addView(textViewText9);
+        display();
+    }
+
+    @Override
+    public void onPostCreate(Bundle bundle) {
+        super.onPostCreate(bundle);
+        AppLanguage.apply(this);
+        AppLanguage.watch(this);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle bundle) {
+        bundle.putString("expression", this.calculator.expression());
+        bundle.putBoolean("finished", this.calculator.finished());
+        bundle.putString("taxPercent", Calculator.plain(this.taxPercent));
+        bundle.putBoolean("includedTax", this.includedTax);
+        super.onSaveInstanceState(bundle);
+    }
 }

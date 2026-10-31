@@ -1,393 +1,4048 @@
 package com.amalaei.engineering;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
+import android.app.NotificationManager;
+import android.app.TimePickerDialog;
 import android.app.role.RoleManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
-import android.graphics.Color;
+import android.content.res.ColorStateList;
+import android.database.sqlite.SQLiteConstraintException;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Bitmap;
+import android.graphics.Insets;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.Icon;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.text.format.DateFormat;
+import android.view.KeyEvent;
 import android.view.View;
-import android.widget.*;
-import org.json.JSONObject;
+import android.view.WindowInsets;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.DatePicker;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.SpinnerAdapter;
+import android.widget.Switch;
+import android.widget.TextView;
+import android.widget.TimePicker;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-@android.annotation.SuppressLint("SetTextI18n")
 public final class MainActivity extends BaseSecureActivity {
-    private static final int MAX_BACKUP_BYTES=25*1024*1024,MAX_ENCRYPTED_BACKUP_BYTES=36*1024*1024;
-    private final int BLUE=Color.rgb(15,118,110), NAVY=Color.rgb(16,42,67), INK=Color.rgb(16,42,67), MUTED=Color.rgb(98,116,135), BG=Color.rgb(245,247,250), LINE=Color.rgb(218,226,234);
-    private String business=AppMode.MODE, tab="home", search="";
-    private int limit=100,requestFilter=0;
-    private LinearLayout root, content;
-    private Store store;
-    private android.graphics.Typeface cairo;
-    private boolean ready=false, importing=false;
-    private JSONObject postDraft;
-    private AlertDialog postDialog;
-    private final java.util.Map<String,EditText> postInputs=new java.util.LinkedHashMap<>();
-    private Spinner postCategory;
-    private int adFilter=0,adLimit=20;
-    private final java.util.LinkedHashSet<Long> selectedCalls=new java.util.LinkedHashSet<>();
+    private static final int MAX_BACKUP_BYTES = 26214400;
+    private static final int MAX_ENCRYPTED_BACKUP_BYTES = 37748736;
+    private int backgroundOps;
+    private Typeface cairo;
+    private LinearLayout content;
     private char[] pendingBackupPassword;
     private String pendingCsv;
-    private int backgroundOps;
-    @Override public void onCreate(Bundle state){super.onCreate(state);AppLanguage.apply(this);cairo=android.graphics.Typeface.createFromAsset(getAssets(),"fonts/Cairo.ttf");store=new Store(this);if(state!=null){business=AppMode.MODE;tab=state.getString("tab","home");}ready=true;render();receive(getIntent());if(!getSharedPreferences("settings",0).getBoolean("notificationsSetup19",false)){getSharedPreferences("settings",0).edit().putBoolean("notificationsSetup19",true).apply();enableNotifications();}if(state!=null&&state.containsKey("postDraft"))try{editPost(new JSONObject(state.getString("postDraft")));}catch(Exception ignored){}}
-    @Override public void onPostCreate(Bundle state){super.onPostCreate(state);AppLanguage.watch(this);}
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);receive(intent);}
-    @Override protected void onSaveInstanceState(Bundle state){if(postDraft!=null){capturePost();state.putString("postDraft",postDraft.toString());}state.putString("business",business);state.putString("tab",tab);super.onSaveInstanceState(state);}
-    @Override protected void onResume(){super.onResume();if(ready&&isUnlocked()){render();Reminders.schedule(this);if(BuildConfig.DIRECT_CALL_LOG&&getSharedPreferences("settings",0).getBoolean("autoSync",false)&&checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED&&System.currentTimeMillis()-getSharedPreferences("settings",0).getLong("lastSync",0)>60000)syncHistory(false);}}
-    @Override protected void onDestroy(){if(pendingBackupPassword!=null)java.util.Arrays.fill(pendingBackupPassword,'\0');if(backgroundOps==0)store.close();super.onDestroy();}
-    private int dp(int value){return (int)(value*getResources().getDisplayMetrics().density);}
-    private String tr(String arabic,String english){return AppLanguage.text(this,arabic,english);}
-    private GradientDrawable surface(int color){return shape(color,20,0);}
-    private GradientDrawable shape(int color,int radius,int stroke){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));if(stroke!=0)d.setStroke(dp(1),stroke);return d;}
-    private GradientDrawable gradient(int start,int end,int radius){GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{start,end});d.setCornerRadius(dp(radius));return d;}
-    private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
-    private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(android.view.Gravity.CENTER_VERTICAL);return l;}
-    private TextView text(String value,int size){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(INK);t.setTypeface(cairo);t.setFontVariationSettings("'wght' "+(size>=19?650:450));t.setFontFeatureSettings("kern");t.setGravity(android.view.Gravity.START);t.setPadding(0,dp(4),0,dp(4));return t;}
-    private void muted(LinearLayout parent,String label){TextView t=text(label,13);t.setTextColor(MUTED);parent.addView(t);}
-    private Button button(LinearLayout parent,String label,Runnable action){Button b=new Button(this);b.setText(label);b.setTextSize(14);b.setTypeface(cairo);b.setFontVariationSettings("'wght' 600");b.setAllCaps(false);b.setTextColor(BLUE);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setStateListAnimator(null);b.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x220F766E),shape(0xFFE7F3F2,13,0),null));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(46));lp.setMargins(0,dp(5),0,dp(5));parent.addView(b,lp);b.setOnClickListener(v->action.run());return b;}
-    private void primary(Button b){b.setTextColor(Color.WHITE);b.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF),shape(BLUE,14,0),null));}
-    private void alert(String value){new AlertDialog.Builder(this).setMessage(value).setPositiveButton("حسنًا",null).show();}
-    private Spinner spinner(LinearLayout parent,String label,String[] values,int selected){muted(parent,label);Spinner sp=new Spinner(this);sp.setPadding(dp(12),dp(6),dp(12),dp(6));sp.setBackground(shape(BG,12,LINE));sp.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));sp.setSelection(selected);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(52));lp.setMargins(0,0,0,dp(12));parent.addView(sp,lp);return sp;}
-    private LinearLayout card(LinearLayout parent){LinearLayout box=column();box.setPadding(dp(18),dp(16),dp(18),dp(16));box.setBackground(shape(Color.WHITE,18,LINE));box.setElevation(dp(1));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,dp(7),0,dp(7));parent.addView(box,lp);return box;}
-    private TextView pill(String label,int ink,int background){TextView t=text(label,11);t.setTextColor(ink);t.setPadding(dp(10),dp(5),dp(10),dp(5));t.setBackground(shape(background,20,0));return t;}
-    private void empty(String title,String detail){LinearLayout box=card(content);box.setGravity(android.view.Gravity.CENTER);box.setPadding(dp(24),dp(35),dp(24),dp(35));Glyph icon=new Glyph(this,"clients",BLUE);box.addView(icon,new LinearLayout.LayoutParams(dp(42),dp(42)));TextView t=text(title,19);t.setGravity(17);box.addView(t);TextView d=text(detail,14);d.setTextColor(MUTED);d.setGravity(17);box.addView(d);}
-    private void metric(LinearLayout parent,String label,int value,int color){LinearLayout box=column();box.setPadding(dp(12),dp(12),dp(12),dp(12));box.setBackground(shape(Color.WHITE,16,LINE));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(3),0,dp(3),0);parent.addView(box,lp);TextView number=text(String.valueOf(value),25);number.setTextColor(color);box.addView(number);muted(box,label);}
-    private String[] stages(String activity){return SurveyRequests.stages(activity,"sales");}
-    private String[] stages(String activity,String requestType){return SurveyRequests.stages(activity,requestType);}
-    private void enableNotifications(){getSharedPreferences("settings",0).edit().putBoolean("reminders",true).apply();Reminders.channel(this);if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},13);return;}if(!Reminders.allowed(this)){startActivity(Reminders.settings(this));return;}Reminders.deliver(this);Reminders.schedule(this);render();}
+    private Spinner postCategory;
+    private AlertDialog postDialog;
+    private JSONObject postDraft;
+    private LinearLayout root;
+    private Store store;
+    private static final String[] POST_CATEGORIES = {"تعريف", "عرض", "معلومة", "نصيحة", "مقارنة", "تجربة استخدام"};
+    private static final String[] ORGANIZATION_ACTIVITIES = {"خدمات", "تجارة عامة", "دعم فني", "صيانة", "تسويق", "تسويق رقمي", "بيع مباشر", "بيع تجزئة", "بيع جملة", "خدمات لوجستية", "نقل وتوصيل", "مقاولات", "أجهزة مساحة", "تقنية وبرمجيات", "استشارات", "تدريب وتعليم", "نشاط حرفي", "تصنيع", "عقارات", "مطاعم وأغذية", "صحة وتجميل", "سيارات", "سياحة وسفر", "نشاط آخر — كتابة يدوية"};
+    private final int BLUE = -15434365;
+    private final int NAVY = -15717821;
+    private final int INK = -15189940;
+    private final int MUTED = -10192758;
+    private final int BG = -788486;
+    private final int LINE = -2299923;
+    private String business = "survey";
+    private String tab = "home";
+    private String search = "";
+    private int limit = 100;
+    private int requestFilter = 0;
+    private int customerStageFilter = 0;
+    private String followDate = "";
+    private boolean ready = false;
+    private boolean importing = false;
+    private final Map<String, EditText> postInputs = new LinkedHashMap();
+    private int adFilter = 0;
+    private int adLimit = 20;
+    private final LinkedHashSet<Long> selectedCalls = new LinkedHashSet<>();
 
-    private void render(){
-        getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(Color.WHITE);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-        root=column();root.setLayoutDirection(AppLanguage.direction(this));root.setBackgroundColor(BG);
-        root.setOnApplyWindowInsetsListener((v,insets)->{int top,bottom;if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars());top=bars.top;bottom=bars.bottom;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();}v.setPadding(0,top,0,bottom);return insets;});setContentView(root);
-        LinearLayout header=row();header.setPadding(dp(20),dp(14),dp(20),dp(12));root.addView(header);
-        TextView mark=text("T",22);mark.setGravity(17);mark.setTextColor(Color.WHITE);mark.setPadding(0,0,0,0);mark.setBackground(gradient(NAVY,BLUE,14));mark.setElevation(dp(2));header.addView(mark,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        LinearLayout identity=column();identity.setPadding(dp(10),0,dp(8),0);header.addView(identity,new LinearLayout.LayoutParams(0,-2,1));TextView logo=text(tr(AppMode.BRAND,"Tawasul"),22);logo.setTextColor(NAVY);logo.setSingleLine(true);identity.addView(logo);TextView subtitle=text(tr("إدارة العملاء","CRM workspace"),11);subtitle.setTextColor(MUTED);subtitle.setSingleLine(true);identity.addView(subtitle);TextView local=pill(tr("خاص وآمن","Secure"),0xFF0F766E,0xFFE7F8F5);header.addView(local);TextView language=pill("AR | EN",NAVY,0xFFE7EEF8);language.setContentDescription(tr("تغيير اللغة","Change language"));language.setPadding(dp(7),dp(5),dp(7),dp(5));LinearLayout.LayoutParams languageLp=new LinearLayout.LayoutParams(-2,-2);languageLp.setMargins(dp(5),0,0,0);header.addView(language,languageLp);language.setOnClickListener(v->switchLanguage());
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);scroll.setVerticalScrollBarEnabled(false);content=column();content.setPadding(dp(20),dp(4),dp(20),dp(20));scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        try{if(tab.equals("home"))home();else if(tab.equals("messages"))messages();else if(tab.equals("settings"))settings();else if(tab.equals("ads"))advertising();else clients();}catch(Exception e){empty("تعذر عرض البيانات","أعد فتح التطبيق وتحقق من مساحة الهاتف.");}
-        LinearLayout nav=row();nav.setPadding(dp(6),dp(8),dp(6),dp(4));nav.setBackground(shape(Color.WHITE,0,LINE));root.addView(nav);
-        String[][] routes={{"home",tr("الرئيسية","Home")},{"clients",tr("العملاء","Customers")},{"today",tr("المتابعات","Follow-ups")},{"unassigned",tr("الوارد","Inbox")},{"messages",tr("الرسائل","Messages")},{"settings",tr("الإعدادات","Settings")}};
-        for(String[] route:routes){boolean active=tab.equals(route[0]);LinearLayout item=column();item.setGravity(17);item.setPadding(0,dp(5),0,dp(5));if(active)item.setBackground(shape(0xFFE7F3F2,14,0));nav.addView(item,new LinearLayout.LayoutParams(0,dp(64),1));item.addView(new Glyph(this,route[0],active?BLUE:MUTED),new LinearLayout.LayoutParams(dp(23),dp(23)));TextView name=text(route[1],10);name.setTextColor(active?BLUE:MUTED);name.setGravity(17);item.addView(name);item.setOnClickListener(v->{tab=route[0];limit=100;render();});}
+    public void adCopy() {
+        final String str = this.business;
+        LinearLayout linearLayoutForm = form();
+        muted(linearLayoutForm, "قوالب نصية محلية مجانية؛ لا تولّد صورًا ولا تضيف خصمًا أو وعدًا من تلقاء نفسها.");
+        final EditText editTextField = field(linearLayoutForm, str.equals("survey") ? "الجهاز أو الخدمة" : "البرنامج أو الميزة", "", 1);
+        final EditText editTextField2 = field(linearLayoutForm, "الفائدة أو المعلومات التي تريد إبرازها", "", 131073);
+        final EditText editTextField3 = field(linearLayoutForm, "اسم النشاط (اختياري)", profileBrand(str), 1);
+        final EditText editTextField4 = field(linearLayoutForm, "بيانات المنشأة المصاحبة للنص — يمكنك تعديلها لهذا المنشور", profileFooter(str, false), 131073);
+        new FluentDialog(this).setTitle("ثلاث أفكار للنص").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("تجهيز الصيغ", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$adCopy$132(editTextField, editTextField2, editTextField3, editTextField4, str, dialogInterface, i);
+            }
+        }).show();
     }
-    private void home(){
-        ArrayList<JSONObject> totals=store.query("SELECT COUNT(*) AS customers, SUM(CASE WHEN stage<4 THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage<4 AND followUp<>'' AND followUp<=? THEN 1 ELSE 0 END) AS due FROM leads WHERE business=?",LocalDate.now().toString(),business);JSONObject total=totals.get(0);
-        LinearLayout pulse=row();pulse.setGravity(android.view.Gravity.CENTER_VERTICAL);pulse.setPadding(dp(16),dp(8),dp(16),dp(8));pulse.setBackground(gradient(NAVY,0xFF155E75,18));pulse.setElevation(dp(3));pulse.setClickable(true);pulse.setForeground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF),null,null));LinearLayout.LayoutParams pulseLp=new LinearLayout.LayoutParams(-1,dp(64));pulseLp.setMargins(0,0,0,dp(5));content.addView(pulse,pulseLp);LinearLayout pulseIcon=column();pulseIcon.setGravity(17);pulseIcon.setBackground(shape(0x26FFFFFF,14,0));pulseIcon.addView(new Glyph(this,"today",Color.WHITE),new LinearLayout.LayoutParams(dp(26),dp(26)));pulse.addView(pulseIcon,new LinearLayout.LayoutParams(dp(46),dp(46)));LinearLayout pulseCopy=column();pulseCopy.setPadding(dp(12),0,0,0);pulse.addView(pulseCopy,new LinearLayout.LayoutParams(0,-2,1));TextView pulseTitle=text(tr("ملخص اليوم","Today at a glance"),16);pulseTitle.setTextColor(Color.WHITE);pulseCopy.addView(pulseTitle);TextView pulseText=text(tr("العملاء ","Customers ")+total.optInt("customers")+"  •  "+tr("فرص ","Active ")+total.optInt("active")+"  •  "+tr("متابعات ","Due ")+total.optInt("due"),12);pulseText.setTextColor(0xFFCCFBF1);pulseText.setSingleLine(true);pulseCopy.addView(pulseText);pulse.setOnClickListener(v->{tab="today";render();});
-        TextView quick=text(tr("الوصول السريع","Quick access"),20);quick.setPadding(0,dp(5),0,0);content.addView(quick);
-        LinearLayout actions=row();content.addView(actions);homeAction(actions,tr("عميل جديد","New customer"),"clients",0xFFE0F2FE,0xFFBAE6FD,0xFF0369A1,()->edit(new JSONObject(),0));homeAction(actions,tr("مراجعة الوارد","Review inbox"),"unassigned",0xFFDCFCE7,0xFFBBF7D0,0xFF15803D,()->{tab="unassigned";render();});
-        LinearLayout actions2=row();content.addView(actions2);homeAction(actions2,tr("المتابعات","Follow-ups"),"today",0xFFF3E8FF,0xFFE9D5FF,0xFF7E22CE,()->{tab="today";render();});homeAction(actions2,tr("الحاسبة","Calculator"),"calculator",0xFFFFF3D6,0xFFFDE68A,0xFFB45309,()->startActivity(new Intent(this,CalculatorActivity.class)));
-        homeWideAction(tr("الدفاتر والعهد والمصروفات","Ledgers, cash & expenses"),"ledger",0xFFFFE4E6,0xFFFECACA,0xFFBE123C,()->startActivity(new Intent(this,LedgerActivity.class)));
-    }
-    private void homeSummary(LinearLayout parent,String label,int number,String icon,int color){LinearLayout row=row();row.setPadding(0,dp(8),0,dp(8));parent.addView(row,new LinearLayout.LayoutParams(-1,-2));Glyph glyph=new Glyph(this,icon,color);row.addView(glyph,new LinearLayout.LayoutParams(dp(24),dp(24)));TextView title=text(label,15);title.setPadding(dp(12),0,0,0);row.addView(title,new LinearLayout.LayoutParams(0,-2,1));TextView value=text(String.valueOf(number),20);value.setTextColor(color);row.addView(value);}
-    private GradientDrawable glass(int start,int end){GradientDrawable d=gradient(start,end,18);d.setStroke(dp(1),0xFFE1E8F0);return d;}
-    private void homeAction(LinearLayout parent,String label,String icon,int start,int end,int accent,Runnable action){LinearLayout box=column();box.setGravity(17);box.setPadding(dp(10),dp(10),dp(10),dp(8));box.setBackground(glass(0xFFFFFFFF,0xFFF7F9FC));box.setElevation(dp(3));box.setClickable(true);box.setForeground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x120F766E),null,null));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(104),1);lp.setMargins(dp(4),dp(4),dp(4),dp(4));parent.addView(box,lp);LinearLayout iconBubble=column();iconBubble.setGravity(17);iconBubble.setBackground(shape(accent,14,0));iconBubble.addView(new Glyph(this,icon,Color.WHITE),new LinearLayout.LayoutParams(dp(27),dp(27)));box.addView(iconBubble,new LinearLayout.LayoutParams(dp(46),dp(46)));TextView title=text(label,14);title.setTextColor(NAVY);title.setGravity(17);title.setPadding(0,dp(5),0,0);box.addView(title);box.setOnClickListener(v->action.run());}
-    private void homeWideAction(String label,String icon,int start,int end,int accent,Runnable action){LinearLayout box=row();box.setGravity(android.view.Gravity.CENTER_VERTICAL);box.setPadding(dp(14),dp(7),dp(14),dp(7));box.setBackground(glass(0xFFFFFFFF,0xFFF7F9FC));box.setElevation(dp(3));box.setClickable(true);box.setForeground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x120F766E),null,null));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(66));lp.setMargins(0,dp(4),0,0);content.addView(box,lp);LinearLayout iconBubble=column();iconBubble.setGravity(17);iconBubble.setBackground(shape(accent,14,0));iconBubble.addView(new Glyph(this,icon,Color.WHITE),new LinearLayout.LayoutParams(dp(26),dp(26)));box.addView(iconBubble,new LinearLayout.LayoutParams(dp(44),dp(44)));TextView title=text(label,15);title.setTextColor(NAVY);title.setSingleLine(true);title.setPadding(dp(12),0,dp(6),0);box.addView(title,new LinearLayout.LayoutParams(0,-2,1));TextView arrow=text("‹",26);arrow.setTextColor(accent);box.addView(arrow);box.setOnClickListener(v->action.run());}
-    private void homeFollowUp(JSONObject lead){LinearLayout row=card(content);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(android.view.Gravity.CENTER_VERTICAL);row.setPadding(dp(14),dp(10),dp(14),dp(10));Glyph dot=new Glyph(this,"today",BLUE);row.addView(dot,new LinearLayout.LayoutParams(dp(23),dp(23)));LinearLayout detail=column();detail.setPadding(dp(10),0,dp(10),0);row.addView(detail,new LinearLayout.LayoutParams(0,-2,1));detail.addView(text(lead.optString("name").isEmpty()?"عميل غير مسمى":lead.optString("name"),16));muted(detail,lead.optString("interest").isEmpty()?"متابعة عميل":lead.optString("interest"));TextView time=text(lead.optString("followTime","09:00"),14);time.setTextColor(MUTED);row.addView(time);row.setOnClickListener(v->edit(lead,0));}
-    private void clients(){
-        String countSql="SELECT COUNT(*) AS total, SUM(CASE WHEN stage<4 THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage=4 THEN 1 ELSE 0 END) AS won FROM leads WHERE business=?";ArrayList<JSONObject> stats=business.equals("survey")&&!tab.equals("unassigned")&&requestFilter>0?store.query(countSql+" AND requestType=?",business,SurveyRequests.KEYS[requestFilter-1]):store.query(countSql,business);
-        JSONObject counts=stats.get(0);
-        content.addView(text(tab.equals("today")?"متابعات اليوم":tab.equals("unassigned")?"الوارد للمراجعة":"العملاء",27));
-        muted(content,tab.equals("today")?"المواعيد المستحقة والمتأخرة في مكان واحد":tab.equals("unassigned")?"هذه أرقام من سجل المكالمات وليست عملاء حتى تعتمدها بنفسك":"ملفات العملاء المعتمدة وفرص المتابعة الحالية");
-        if(!tab.equals("unassigned")){LinearLayout metrics=row();LinearLayout.LayoutParams ml=new LinearLayout.LayoutParams(-1,-2);ml.setMargins(0,dp(14),0,dp(12));content.addView(metrics,ml);metric(metrics,"إجمالي العملاء",counts.optInt("total"),BLUE);metric(metrics,business.equals("survey")?"طلبات نشطة":"فرص نشطة",counts.optInt("active"),0xFFD69538);metric(metrics,"مكتملون",counts.optInt("won"),0xFF348C76);}
-        if(business.equals("software"))button(content,"اشتراكات ومشاريع ودعم البرامج",()->startActivity(new Intent(this,SoftwareActivity.class)));
-        if(business.equals("survey")&&tab.equals("clients"))button(content,"عروض أسعار المساحة • إنشاء PDF",()->startActivity(new Intent(this,QuoteActivity.class)));
-        if(!tab.equals("unassigned"))primary(button(content,"إضافة عميل",()->edit(new JSONObject(),0)));
-        if(tab.equals("today")&&(!Reminders.enabled(this)||!Reminders.allowed(this)))primary(button(content,"تفعيل إشعارات المتابعة",this::enableNotifications));
-        if(business.equals("survey")&&!tab.equals("unassigned")){Spinner filter=spinner(content,"نوع الطلب",new String[]{"جميع الطلبات","المبيعات","الدعم الفني","الصيانة","المعايرة"},requestFilter);filter.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int pos,long id){if(pos!=requestFilter){requestFilter=pos;limit=100;render();}}});}
-        if(tab.equals("unassigned")){LinearLayout review=card(content);review.addView(text("راجع قبل الاعتماد",19));muted(review,"الاستيراد لا ينشئ عملاء تلقائيًا. اختر فقط الأرقام التي تتأكد أنها عملاء ثم اعتمدها.");primary(button(review,BuildConfig.DIRECT_CALL_LOG?"استيراد من سجل المكالمات":"استيراد ملف سجل المكالمات CSV",BuildConfig.DIRECT_CALL_LOG?this::callSetup:this::chooseCallCsv));LinearLayout reviewActions=row();review.addView(reviewActions);Button approve=button(reviewActions,"اعتماد المحدد",this::assignCalls);approve.setLayoutParams(new LinearLayout.LayoutParams(0,dp(44),1));Button clear=button(reviewActions,"حذف غير المعتمد",()->new AlertDialog.Builder(this).setTitle("حذف الأرقام للمراجعة").setMessage("سيُحذف فقط ما لم تعتمدْه كعميل. لا يمكن التراجع إلا من نسخة احتياطية.").setNegativeButton("إلغاء",null).setPositiveButton("حذف",(d,w)->{int removed=store.removeUnassigned();selectedCalls.clear();render();alert("تم حذف "+removed+" رقمًا غير معتمد");}).show());LinearLayout.LayoutParams clearLp=new LinearLayout.LayoutParams(0,dp(44),1);clearLp.setMargins(dp(6),0,0,0);clear.setLayoutParams(clearLp);}
-        if(tab.equals("clients")){
-            LinearLayout searchRow=row();LinearLayout.LayoutParams sr=new LinearLayout.LayoutParams(-1,-2);sr.setMargins(0,dp(10),0,dp(10));content.addView(searchRow,sr);EditText find=new EditText(this);find.setTextSize(14);find.setTypeface(cairo);find.setSingleLine(true);find.setHint("ابحث بالاسم أو الرقم أو الشركة");find.setHintTextColor(MUTED);find.setPadding(dp(14),0,dp(14),0);find.setBackground(shape(Color.WHITE,14,LINE));find.setText(search);searchRow.addView(find,new LinearLayout.LayoutParams(0,dp(48),1));Button go=button(searchRow,"بحث",()->{search=find.getText().toString().trim();limit=100;render();});LinearLayout.LayoutParams gl=new LinearLayout.LayoutParams(dp(64),dp(48));gl.setMargins(0,0,dp(8),0);go.setLayoutParams(gl);find.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);find.setOnEditorActionListener((t,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH){go.performClick();return true;}return false;});
+
+    private void advertising() {
+        UiTheme.header(this.content, tr("المنشورات", "Posts"), "ads");
+        JSONObject jSONObjectProfile = this.store.profile(this.business);
+        muted(this.content, jSONObjectProfile.optString("name").isEmpty() ? "أضف بيانات منشأة هذا النشاط" : jSONObjectProfile.optString("name"));
+        button(this.content, "بيانات المنشأة ونوع نشاطها", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$advertising$111();
+            }
+        });
+        muted(this.content, "مكتبة مستقلة لهذا النشاط • صور ونصوص جاهزة للمشاركة");
+        JSONObject jSONObject = this.store.query("SELECT COUNT(*) AS total,SUM(CASE WHEN lastPreparedAt=0 THEN 1 ELSE 0 END) AS unused,SUM(CASE WHEN plannedDate<>'' AND plannedDate<=? THEN 1 ELSE 0 END) AS due FROM posts WHERE business=?", LocalDate.now().toString(), this.business).get(0);
+        LinearLayout linearLayoutRow = row();
+        this.content.addView(linearLayoutRow);
+        metric(linearLayoutRow, "منشورات", jSONObject.optInt("total"), -15434365);
+        metric(linearLayoutRow, "لم تُفتح", jSONObject.optInt("unused"), -13333386);
+        metric(linearLayoutRow, "مخطط لها", jSONObject.optInt("due"), -2714312);
+        primary(button(this.content, "+  إضافة صورة أو منشور", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$advertising$112();
+            }
+        }));
+        button(this.content, "تجهيز ثلاث صيغ للنص", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.adCopy();
+            }
+        });
+        spinner(this.content, "عرض المكتبة", new String[]{"كل المنشورات", "المخطط لليوم والمتأخر", "لم يُفتح للمشاركة بعد"}, this.adFilter).setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long j) {
+                if (MainActivity.this.adFilter != i) {
+                    MainActivity.this.adFilter = i;
+                    MainActivity.this.adLimit = 20;
+                    MainActivity.this.render();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+            }
+        });
+        muted(this.content, tr("اضغط مشاركة الصورة والنص لفتح خيارات Facebook وWhatsApp Business وجدولة التذكيرات وسجل التأكيدات. الإرسال داخل المنصة يدوي.", "Tap Share image and text for Facebook, WhatsApp Business, reminders and confirmation history. Sending inside each platform is manual."));
+        int i = this.adFilter;
+        String str = i == 1 ? " AND plannedDate<>'' AND plannedDate<=?" : i == 2 ? " AND lastPreparedAt=0" : "";
+        ArrayList<JSONObject> arrayListQuery = i == 1 ? this.store.query("SELECT * FROM posts WHERE business=?" + str + " ORDER BY plannedDate,createdAt DESC LIMIT 21 OFFSET " + (this.adLimit - 20), this.business, LocalDate.now().toString()) : this.store.query("SELECT * FROM posts WHERE business=?" + str + " ORDER BY createdAt DESC LIMIT 21 OFFSET " + (this.adLimit - 20), this.business);
+        if (arrayListQuery.isEmpty()) {
+            empty("جهّز أول منشور لهذا النشاط", "أضف صورة من هاتفك ونصًا قصيرًا؛ ستجده هنا عند الحاجة");
         }
-        String where="business=?", order="CASE WHEN lastCallAt=0 THEN 1 ELSE 0 END, lastCallAt DESC, name COLLATE NOCASE";ArrayList<String> args=new ArrayList<>();args.add(business);
-        if(tab.equals("clients"))muted(content,"مرتبة حسب آخر تواصل؛ استخدم البحث للوصول السريع إلى ملف العميل.");
-        if(tab.equals("today")){where+=" AND stage<4 AND (followUp='' OR followUp<=?)";args.add(LocalDate.now().toString());order="CASE WHEN followUp='' THEN 1 ELSE 0 END, followUp ASC, CASE WHEN followUp='' THEN lastCallAt END DESC, name COLLATE NOCASE";content.addView(text("المتأخر، ثم المستحق اليوم، ثم العملاء دون موعد حسب آخر اتصال. لا تظهر الطلبات المكتملة أو المغلقة.",14));}
-        if(tab.equals("unassigned")){where="business=''";args.clear();order="lastCallAt DESC";}
-        if(business.equals("survey")&&!tab.equals("unassigned")&&requestFilter>0){where+=" AND requestType=?";args.add(SurveyRequests.KEYS[requestFilter-1]);}
-        if(!search.isEmpty()&&tab.equals("clients")){where+=" AND (name LIKE ? OR phone LIKE ? OR company LIKE ?)";for(int i=0;i<3;i++)args.add("%"+search+"%");}
-        ArrayList<JSONObject> list=store.query("SELECT * FROM leads WHERE "+where+" ORDER BY "+order+" LIMIT "+(limit+1),args.toArray(new String[0]));
-        if(list.isEmpty())empty(tab.equals("today")?"متابعاتك تحت السيطرة":"ابدأ بأول عميل",tab.equals("today")?"لا توجد متابعات مستحقة في هذا النشاط اليوم":"أضف عميلًا أو استورد أرقام المكالمات من الإعدادات");
-        if(tab.equals("unassigned")&&!list.isEmpty())button(content,"تحديد المعروض بالكامل",()->{for(int i=0;i<Math.min(limit,list.size());i++)selectedCalls.add(list.get(i).optLong("id"));render();});
-        int shown=0;for(JSONObject lead:list){if(shown++>=limit)break;leadCard(lead);}
-        if(list.size()>limit)button(content,"عرض المزيد",()->{limit+=100;render();});
-    }
-    private void calculatorCard(){
-        LinearLayout tool=row();tool.setGravity(android.view.Gravity.CENTER_VERTICAL);tool.setPadding(dp(18),dp(18),dp(18),dp(18));tool.setBackground(gradient(NAVY,0xFF164E63,20));tool.setElevation(dp(3));tool.setMinimumHeight(dp(112));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,dp(16),0,dp(10));content.addView(tool,lp);
-        LinearLayout copy=column();copy.setGravity(android.view.Gravity.CENTER_VERTICAL);tool.addView(copy,new LinearLayout.LayoutParams(0,-2,1));TextView title=text("الحاسبة الذكية",19);title.setTextColor(Color.WHITE);copy.addView(title,new LinearLayout.LayoutParams(-1,-2));TextView detail=text("حساب سريع وضريبة القيمة المضافة 15%",12);detail.setTextColor(0xFFCCFBF1);detail.setSingleLine(false);detail.setPadding(0,dp(3),0,dp(3));copy.addView(detail,new LinearLayout.LayoutParams(-1,-2));
-        LinearLayout icon=column();icon.setGravity(17);icon.setBackground(shape(0x26FFFFFF,16,0));icon.addView(new Glyph(this,"calculator",Color.WHITE),new LinearLayout.LayoutParams(dp(30),dp(30)));tool.addView(icon,new LinearLayout.LayoutParams(dp(54),dp(54)));tool.setClickable(true);tool.setForeground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF),null,null));tool.setOnClickListener(v->startActivity(new Intent(this,CalculatorActivity.class)));tool.setContentDescription("فتح الحاسبة الذكية");
-    }
-    private void leadCard(JSONObject lead){
-        boolean pending=tab.equals("unassigned");
-        LinearLayout box=card(content);
-        LinearLayout heading=row();box.addView(heading);String name=lead.optString("name"),phone=lead.optString("phone","");boolean unnamed=name.isEmpty()||(!phone.isEmpty()&&Analysis.phone(name).equals(phone));String shownName=pending?(unnamed?"رقم وارد":name):(unnamed?"عميل غير مسمى":name);TextView avatar=text(unnamed?"؟":shownName.substring(0,1),22);avatar.setTextColor(BLUE);avatar.setGravity(17);avatar.setPadding(0,0,0,0);avatar.setBackground(shape(0xFFE7F3F2,15,0));heading.addView(avatar,new LinearLayout.LayoutParams(dp(48),dp(48)));LinearLayout identity=column();identity.setPadding(dp(12),0,dp(12),0);heading.addView(identity,new LinearLayout.LayoutParams(0,-2,1));identity.addView(text(shownName,18));if(!phone.isEmpty()&&!phone.equals("null")){TextView number=text(phone,13);number.setTextDirection(View.TEXT_DIRECTION_LTR);number.setGravity(android.view.Gravity.START);number.setTextColor(MUTED);identity.addView(number);}if(pending){CheckBox selected=new CheckBox(this);selected.setContentDescription("تحديد الرقم للاعتماد");selected.setChecked(selectedCalls.contains(lead.optLong("id")));selected.setOnCheckedChangeListener((v,on)->{if(on)selectedCalls.add(lead.optLong("id"));else selectedCalls.remove(lead.optLong("id"));});heading.addView(selected,new LinearLayout.LayoutParams(dp(48),dp(48)));}
-        if(!pending&&lead.optString("business").equals("survey"))muted(box,"نوع الطلب: "+SurveyRequests.label(lead.optString("requestType","sales")));String[] phase=stages(lead.optString("business"),lead.optString("requestType","sales"));int stage=Math.max(0,Math.min(5,lead.optInt("stage")));TextView badge=pill(pending?"بانتظار المراجعة":phase[stage],stage==4?0xFF348C76:BLUE,stage==4?0xFFEAF5F0:0xFFE7F3F2);LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(-2,-2);bl.setMargins(0,dp(12),0,dp(6));box.addView(badge,bl);
-        if(!lead.optString("company").isEmpty())muted(box,lead.optString("company"));if(!lead.optString("interest").isEmpty())box.addView(text(lead.optString("interest"),14));
-        String due=lead.optString("followUp"),today=LocalDate.now().toString();String label=due.isEmpty()?"لم يحدد موعد متابعة":due.compareTo(today)<0?"متأخرة  •  "+due:due.equals(today)?"متابعة اليوم":"المتابعة  •  "+due;if(!due.isEmpty())label+="  "+lead.optString("followTime","09:00");TextView date=text(label,13);date.setTextColor(!due.isEmpty()&&due.compareTo(today)<=0?0xFFB86F34:MUTED);box.addView(date);
-        if(!lead.optString("contactName").isEmpty())muted(box,"جهة الاتصال: "+lead.optString("contactName"));if(lead.optLong("lastCallAt")>0)muted(box,"آخر اتصال: "+android.text.format.DateFormat.format("yyyy-MM-dd HH:mm",lead.optLong("lastCallAt")));
-        LinearLayout actions=row();box.addView(actions);Button edit=button(actions,"التفاصيل",()->edit(lead,0));edit.setLayoutParams(new LinearLayout.LayoutParams(0,dp(44),1));
-        if(pending){edit.setText("مراجعة");Button approve=button(actions,"اعتماد عميل",()->{selectedCalls.add(lead.optLong("id"));assignCalls();});LinearLayout.LayoutParams al=new LinearLayout.LayoutParams(0,dp(44),1);al.setMargins(dp(6),0,0,0);approve.setLayoutParams(al);}
-        else if(!phone.isEmpty()&&!phone.equals("null")){Button call=button(actions,"اتصال",()->{store.event(lead.optLong("id"),"dial","فتح شاشة الاتصال — لا يعني إتمام المكالمة",System.currentTimeMillis(),null);startActivity(new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+phone)));});LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(0,dp(44),1);cl.setMargins(dp(6),0,dp(6),0);call.setLayoutParams(cl);Button wa=button(actions,"واتساب",()->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/"+phone.replace("+",""))));}catch(Exception e){alert("لا يوجد تطبيق يستطيع فتح واتساب.");}});wa.setTextColor(0xFF348C76);wa.setBackground(shape(0xFFEAF5F0,13,0));wa.setLayoutParams(new LinearLayout.LayoutParams(0,dp(44),1));}
-    }
-    private void savePhoneContact(JSONObject lead){String phone=Analysis.phone(lead.optString("phone"));if(phone.isEmpty()){alert("أضف رقم هاتف صحيحًا للعميل أولًا");return;}Boolean exists=PhoneData.exists(this,phone);if(Boolean.TRUE.equals(exists)){alert("هذا الرقم موجود بالفعل في جهات اتصال الهاتف");return;}try{Intent intent=new Intent(exists==null?Intent.ACTION_INSERT_OR_EDIT:Intent.ACTION_INSERT).setType(exists==null?android.provider.ContactsContract.Contacts.CONTENT_ITEM_TYPE:android.provider.ContactsContract.Contacts.CONTENT_TYPE).putExtra(android.provider.ContactsContract.Intents.Insert.NAME,lead.optString("name")).putExtra(android.provider.ContactsContract.Intents.Insert.PHONE,phone).putExtra(android.provider.ContactsContract.Intents.Insert.PHONE_TYPE,phone.startsWith("+9665")?android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE:android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_WORK).putExtra(android.provider.ContactsContract.Intents.Insert.COMPANY,lead.optString("company")).putExtra(android.provider.ContactsContract.Intents.Insert.EMAIL,lead.optString("email"));startActivity(intent);}catch(Exception unavailable){alert("تعذر فتح شاشة جهات الاتصال على الهاتف");}}
-        private void tools(LinearLayout form,JSONObject lead,AlertDialog parent){
-        form.addView(text("ملف العميل",20));
-        if(!lead.optString("phone").isEmpty()&&!lead.optString("phone").equals("null"))button(form,"حفظ في جهات اتصال الهاتف",()->savePhoneContact(lead));
-        if(lead.optString("business").equals("software"))button(form,"اشتراكات وطلبات هذا العميل",()->startActivity(new Intent(this,SoftwareActivity.class).putExtra("leadId",lead.optLong("id"))));
-        button(form,"سجل التعاملات والملاحظات",()->timeline(lead.optLong("id")));
-        button(form,"تفاصيل طلب العميل",()->requestDetails(lead.optLong("id")));
-        button(form,"قوالب رسائل واتساب",()->templates(lead.optLong("id")));
-        if(!lead.optString("followUp").isEmpty()){
-            button(form,"تمت المتابعة",()->{parent.dismiss();followAction(lead.optLong("id"),false);});
-            button(form,"تأجيل المتابعة إلى الغد",()->{parent.dismiss();followAction(lead.optLong("id"),true);});
+        int i2 = 0;
+        for (final JSONObject jSONObject2 : arrayListQuery) {
+            int i3 = i2 + 1;
+            if (i2 >= 20) {
+                break;
+            }
+            LinearLayout linearLayoutCard = card(this.content);
+            linearLayoutCard.addView(text(jSONObject2.optString("title"), 20));
+            linearLayoutCard.addView(pill(jSONObject2.optString("category"), -15434365, -1575950));
+            showPostImage(linearLayoutCard, jSONObject2.optString("image"));
+            String strOptString = jSONObject2.optString("body");
+            if (!strOptString.isEmpty()) {
+                if (strOptString.length() > 650) {
+                    strOptString = strOptString.substring(0, 650) + "…";
+                }
+                TextView textViewText = text(strOptString, 14);
+                textViewText.setTextIsSelectable(true);
+                linearLayoutCard.addView(textViewText);
+            }
+            if (!jSONObject2.optString("plannedDate").isEmpty()) {
+                muted(linearLayoutCard, "يوم النشر المخطط: " + jSONObject2.optString("plannedDate"));
+            }
+            muted(linearLayoutCard, jSONObject2.optLong("lastPreparedAt") == 0 ? "لم تُفتح المشاركة بعد" : "آخر فتح للمشاركة: " + ((Object) DateFormat.format("yyyy-MM-dd HH:mm", jSONObject2.optLong("lastPreparedAt"))));
+            primary(button(linearLayoutCard, "مشاركة الصورة والنص", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$advertising$113(jSONObject2);
+                }
+            }));
+            LinearLayout linearLayoutRow2 = row();
+            linearLayoutCard.addView(linearLayoutRow2);
+            button(linearLayoutRow2, "تعديل", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$advertising$114(jSONObject2);
+                }
+            }).setLayoutParams(new LinearLayout.LayoutParams(0, dp(44), 1.0f));
+            Button button = button(linearLayoutRow2, "نسخة جديدة", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$advertising$115(jSONObject2);
+                }
+            });
+            LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, dp(44), 1.0f);
+            layoutParams.setMargins(dp(6), 0, dp(6), 0);
+            button.setLayoutParams(layoutParams);
+            button(linearLayoutCard, "سجل فتح المشاركة", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$advertising$116(jSONObject2);
+                }
+            });
+            i2 = i3;
         }
-        muted(form,"هذه الإجراءات تخص البيانات المحفوظة؛ احفظ تعديلات النموذج أولًا.");
-    }
-    private EditText field(LinearLayout form,String label,String value,int type){muted(form,label);EditText e=new EditText(this);e.setTextSize(15);e.setTypeface(cairo);e.setTextColor(INK);e.setInputType(type);e.setText(value.equals("null")?"":value);e.setPadding(dp(14),dp(10),dp(14),dp(10));e.setBackground(shape(BG,12,LINE));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,0,0,dp(14));e.setMinHeight(dp(50));form.addView(e,lp);return e;}
-    private void pickFollowUpDate(EditText due){LocalDate current;try{current=due.getText().toString().trim().isEmpty()?LocalDate.now():LocalDate.parse(due.getText().toString().trim());}catch(Exception ignored){current=LocalDate.now();}new DatePickerDialog(this,(v,y,m,d)->due.setText(LocalDate.of(y,m+1,d).toString()),current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();}
-    private void edit(JSONObject original,long messageId){
-        try{
-            JSONObject seed=new JSONObject(original.toString());if(!seed.has("id")&&!seed.has("business"))seed.put("business",AppMode.MODE);
-            LinearLayout form=column();form.setLayoutDirection(AppLanguage.direction(this));form.setPadding(dp(18),dp(8),dp(18),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(form);
-            if(messageId>0)form.addView(text("اقتراحات من النص — راجع الاسم والرقم والنشاط والموعد قبل الحفظ. التحليل محلي بالكلمات والصيغ، وقد لا يفهم السياق.",16));
-            EditText name=field(form,"اسم العميل *",seed.optString("name"),1);
-            EditText phone=field(form,"الرقم السعودي",seed.optString("phone"),android.text.InputType.TYPE_CLASS_PHONE);phone.setTextDirection(View.TEXT_DIRECTION_LTR);
-            Spinner activity=new Spinner(this);activity.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"","survey","software"}));activity.setSelection(AppMode.MODE.equals("survey")?1:2);activity.setVisibility(View.GONE);form.addView(activity,new LinearLayout.LayoutParams(1,1));
-            muted(form,"نوع الطلب التالي خاص بالمساحة. عند تغيير النوع تبدأ المرحلة من جديد؛ اختر المرحلة المناسبة قبل الحفظ.");
-            Spinner requestType=spinner(form,"نوع الطلب الحالي — نشاط المساحة",SurveyRequests.LABELS,SurveyRequests.index(seed.optString("requestType","sales")));
-            Spinner stage=spinner(form,"المرحلة",stages(seed.optString("business"),seed.optString("requestType","sales")),seed.optInt("stage"));
-            final String[] previous={seed.optString("business")+":"+seed.optString("requestType","sales")};
-            Runnable updateStages=()->{boolean surveying=activity.getSelectedItemPosition()==1;requestType.setEnabled(surveying);String active=activity.getSelectedItemPosition()==2?"software":surveying?"survey":"",kind=surveying?SurveyRequests.KEYS[requestType.getSelectedItemPosition()]:"sales",key=active+":"+kind;if(!key.equals(previous[0])){stage.setAdapter(new ArrayAdapter<String>(MainActivity.this,android.R.layout.simple_spinner_dropdown_item,stages(active,kind)));stage.setSelection(0);previous[0]=key;}};
-            AdapterView.OnItemSelectedListener selection=new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int position,long id){updateStages.run();}};activity.setOnItemSelectedListener(selection);requestType.setOnItemSelectedListener(selection);
-            EditText company=field(form,"الشركة",seed.optString("company"),1);
-            EditText email=field(form,"البريد الإلكتروني للعميل",seed.optString("email"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS),interest=field(form,"الجهاز / البرنامج / الخدمة المطلوبة",seed.optString("interest"),1);
-            EditText due=field(form,"موعد المتابعة — اضغط لفتح التقويم",seed.optString("followUp"),1);due.setTextDirection(View.TEXT_DIRECTION_LTR);due.setFocusable(false);due.setClickable(true);due.setOnClickListener(v->pickFollowUpDate(due));
-            EditText time=field(form,"وقت التنبيه (HH:mm)",seed.optString("followTime","09:00"),1);time.setTextDirection(View.TEXT_DIRECTION_LTR);
-            button(form,"اختيار الوقت",()->{java.time.LocalTime t;try{t=java.time.LocalTime.parse(time.getText());}catch(Exception e){t=java.time.LocalTime.of(9,0);}new android.app.TimePickerDialog(this,(v,h,m)->time.setText(String.format(java.util.Locale.US,"%02d:%02d",h,m)),t.getHour(),t.getMinute(),true).show();});
-            button(form,"اختيار موعد من التقويم",()->pickFollowUpDate(due));
-            button(form,"إزالة الموعد",()->due.setText(""));
-            EditText notes=field(form,"ملاحظات",seed.optString("notes"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);notes.setMinLines(3);
-            CheckBox phoneContact=new CheckBox(this);phoneContact.setTypeface(cairo);phoneContact.setText("فتح جهات اتصال الهاتف لحفظ العميل بعد حفظ بياناته");form.addView(phoneContact);
-            AlertDialog dialog=new AlertDialog.Builder(this).setTitle(messageId>0?"مراجعة وحفظ معلومات الرسالة":seed.optLong("id")>0?"تعديل العميل":"عميل جديد").setView(scroll).setPositiveButton("حفظ",null).setNegativeButton("إلغاء",null).create();
-            if(seed.optLong("id")>0)tools(form,seed,dialog);
-            if(seed.optLong("id")>0)button(form,"حذف العميل",()->new AlertDialog.Builder(this).setMessage("حذف العميل نهائيًا؟ ستبقى الرسائل الأصلية في أرشيف الرسائل.").setNegativeButton("إلغاء",null).setPositiveButton("حذف",(d,w)->{store.remove(seed.optLong("id"));dialog.dismiss();render();Reminders.schedule(this);}).show());
-            dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{
-                seed.put("name",name.getText().toString()).put("phone",phone.getText().toString()).put("business",activity.getSelectedItemPosition()==1?"survey":activity.getSelectedItemPosition()==2?"software":"").put("stage",stage.getSelectedItemPosition()).put("requestType",activity.getSelectedItemPosition()==1?SurveyRequests.KEYS[requestType.getSelectedItemPosition()]:"sales").put("company",company.getText().toString()).put("email",email.getText().toString()).put("interest",interest.getText().toString()).put("followUp",due.getText().toString()).put("notes",notes.getText().toString()).put("followTime",time.getText().toString());
-                android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();try{long id=store.save(seed);if(messageId>0)store.reviewed(messageId,id);getSystemService(android.app.NotificationManager.class).cancel("lead",(int)id);db.setTransactionSuccessful();}finally{db.endTransaction();}
-                dialog.dismiss();render();Reminders.schedule(this);if(phoneContact.isChecked())savePhoneContact(seed);
-            }catch(android.database.sqlite.SQLiteConstraintException duplicate){alert("هذا الرقم موجود بالفعل. اربط الرسالة بالعميل الموجود أو عدّل سجله.");}catch(Exception e){alert(e.getMessage()==null?"تعذر الحفظ":e.getMessage());}}));dialog.show();dialog.getWindow().setBackgroundDrawable(shape(Color.WHITE,24,0));dialog.getWindow().setLayout(-1,-1);dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(BLUE);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(MUTED);
-        }catch(Exception e){alert("تعذر فتح بيانات العميل");}
-    }
-    private void messages(){
-        content.addView(text("رسائل تحتاج المراجعة",23));content.addView(text("شارك نص الرسالة إلى التطبيق للمراجعة؛ لا نقرأ الإشعارات أو المحادثات مباشرة ولا نحلل الصوت والصور.",15));
-        primary(button(content,"لصق نص أو محادثة للتحليل",this::pasteText));
-        ArrayList<JSONObject> items=store.query("SELECT * FROM messages WHERE state='pending' ORDER BY at DESC LIMIT "+(limit+1));
-        if(items.isEmpty())empty("لا توجد رسائل معلّقة","شارك نص رسالة أو ملف TXT من واتساب إلى عملائي، ثم راجع المعلومات قبل حفظها.");
-        int shown=0;for(JSONObject message:items){if(shown++>=limit)break;LinearLayout card=card(content);
-            card.addView(text(message.optString("sender").isEmpty()?"نص مشارك":message.optString("sender"),19));card.addView(text(message.optString("source")+" • "+android.text.format.DateFormat.format("yyyy-MM-dd HH:mm",message.optLong("at")),14));
-            String body=message.optString("body");card.addView(text(body.length()>4000?body.substring(0,4000)+"\n… نص طويل؛ محفوظ في الأرشيف المحلي":body,16));
-            button(card,"تحليل ومراجعة المعلومات",()->review(message));button(card,"تجاهل هذه الرسالة",()->new AlertDialog.Builder(this).setMessage("حذف هذه الرسالة من قائمة المراجعة؟").setNegativeButton("إلغاء",null).setPositiveButton("حذف",(d,w)->{store.dismiss(message.optLong("id"));render();}).show());
-        }if(items.size()>limit)button(content,"عرض المزيد",()->{limit+=100;render();});
-        button(content,"عرض أرشيف الرسائل المراجعة",()->{ArrayList<JSONObject> list=store.query("SELECT sender, body FROM messages WHERE state='reviewed' ORDER BY at DESC LIMIT 50");StringBuilder text=new StringBuilder();for(JSONObject m:list)text.append(m.optString("sender")).append(": ").append(m.optString("body")).append("\n\n");alert(text.length()==0?"لا يوجد أرشيف بعد":text.toString());});
-    }
-    private void review(JSONObject message){
-        String body=message.optString("body");java.util.LinkedHashMap<String,ArrayList<ChatText.Message>> parsed=ChatText.parse(body,message.optLong("at"),false);
-        if(parsed.isEmpty()){chooseQuick(message,Analysis.inspect(body,message.optLong("at")),"");return;}
-        LinearLayout f=form();muted(f,"اختر مرسل رسائل العميل حتى لا تُخلط رسائلك أو رسائل المجموعة بمعلوماته. لا تعتمد على عنوان الملف لتحديد الهوية.");String[] people=parsed.keySet().toArray(new String[0]);Spinner sender=spinner(f,"صاحب الرسائل المطلوب تحليلها",people,0);Spinner dates=spinner(f,"صيغة تاريخ ملف واتساب",new String[]{"يوم / شهر / سنة","شهر / يوم / سنة"},0);
-        new AlertDialog.Builder(this).setTitle("تحليل محادثة مصدّرة").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("استخراج المعلومات",(d,w)->{java.util.LinkedHashMap<String,ArrayList<ChatText.Message>> chat=ChatText.parse(body,message.optLong("at"),dates.getSelectedItemPosition()==1);String person=people[sender.getSelectedItemPosition()];ArrayList<ChatText.Message> lines=chat.get(person);if(lines==null)return;StringBuilder combined=new StringBuilder();for(ChatText.Message line:lines)combined.append(line.body).append("\n");Analysis result=Analysis.inspect(combined.toString(),message.optLong("at"));result.followUp="";result.followTime="";for(ChatText.Message line:lines){Analysis one=Analysis.inspect(line.body,line.at);if(!one.followUp.isEmpty()&&(line.dated||line.body.matches("(?s).*20[0-9]{2}-[0-9]{2}-[0-9]{2}.*")))result.followUp=one.followUp;if(!one.followTime.isEmpty())result.followTime=one.followTime;}String number=Analysis.phone(person);if(!number.isEmpty())result.phone=number;chooseQuick(message,result,person);}).show();
-    }
-    private void chooseQuick(JSONObject message,Analysis result,String sender){
-        ArrayList<JSONObject> leads=store.query("SELECT * FROM leads ORDER BY name COLLATE NOCASE LIMIT 1000");JSONObject match=result.phone.isEmpty()?new JSONObject():store.byPhone(result.phone);int selected=0;if(match.optLong("id")>0){boolean found=false;for(JSONObject lead:leads)if(lead.optLong("id")==match.optLong("id"))found=true;if(!found)leads.add(0,match);}
-        String[] labels=new String[leads.size()+1];labels[0]="إنشاء عميل من المعلومات المستخرجة";for(int i=0;i<leads.size();i++){labels[i+1]=leads.get(i).optString("name")+" • "+leads.get(i).optString("phone","");if(leads.get(i).optLong("id")==match.optLong("id")&&match.optLong("id")>0)selected=i+1;}
-        LinearLayout f=form();if(selected>0)muted(f,"وجدنا عميلًا بنفس الرقم؛ تم اقتراحه لتجنب التكرار.");if(result.phones.size()>1)muted(f,"ورد أكثر من رقم في النص. راجع رقم العميل؛ لن نختار أحدها من محتوى الرسالة تلقائيًا.");Spinner choose=spinner(f,"العميل",labels,selected);
-        new AlertDialog.Builder(this).setTitle("ربط المعلومات بالعميل").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("مراجعة وحفظ سريع",(d,w)->quickPanel(message,choose.getSelectedItemPosition()==0?new JSONObject():leads.get(choose.getSelectedItemPosition()-1),result,sender)).show();
-    }
-    private void quickPanel(JSONObject message,JSONObject original,Analysis result,String sender){
-        JSONObject seed;try{seed=new JSONObject(original.toString());}catch(Exception e){alert("تعذر قراءة العميل");return;}LinearLayout f=form();f.addView(text("المعلومات المستخرجة",22));muted(f,"مراجعة واحدة بدل تعبئة نموذج العميل. المعلومات الموجودة لا تُستبدل إلا إذا اخترت ذلك.");boolean fresh=seed.optLong("id")==0;
-        String candidateName=result.name;if(candidateName.isEmpty()&&!result.phone.isEmpty())candidateName=PhoneData.contact(this,result.phone);if(candidateName.isEmpty()&&!sender.isEmpty()&&Analysis.phone(sender).isEmpty())candidateName=sender;if(candidateName.isEmpty())candidateName=result.phone;
-        EditText name=field(f,"اسم العميل أو رقمه",fresh?candidateName:seed.optString("name"),1);EditText phone=field(f,"الرقم السعودي",fresh?result.phone:seed.optString("phone"),android.text.InputType.TYPE_CLASS_PHONE);phone.setTextDirection(View.TEXT_DIRECTION_LTR);
-        String suggested=AppMode.MODE;Spinner activity=spinner(f,"النشاط المقترح",new String[]{"غير محدد","أجهزة المساحة","البرامج والتطبيقات"},suggested.equals("survey")?1:suggested.equals("software")?2:0);activity.setEnabled(false);
-        java.util.LinkedHashMap<String,String> values=new java.util.LinkedHashMap<>();values.put("company",result.company);values.put("email",result.email);values.put("interest",result.interest);values.put("followUp",result.followUp);values.put("followTime",result.followTime);
-        java.util.Map<String,String> labels=new java.util.HashMap<>();labels.put("company","الشركة");labels.put("email","البريد");labels.put("interest","الاهتمام");labels.put("followUp","المتابعة");labels.put("followTime","الوقت");
-        java.util.Map<String,CheckBox> options=new java.util.LinkedHashMap<>();for(java.util.Map.Entry<String,String> entry:values.entrySet()){if(entry.getValue().isEmpty())continue;CheckBox check=new CheckBox(this);String current=seed.optString(entry.getKey());check.setText(labels.get(entry.getKey())+": "+entry.getValue()+(current.isEmpty()?"":"\nالمحفوظ: "+current));check.setChecked((fresh||current.isEmpty())&&!(entry.getKey().equals("followUp")&&entry.getValue().compareTo(LocalDate.now().toString())<0));f.addView(check);options.put(entry.getKey(),check);}
-        JSONObject all;try{all=new JSONObject(seed.optString("requestDetails","{}"));}catch(Exception e){all=new JSONObject();}final JSONObject requests=all;java.util.Map<String,CheckBox> requestOptions=new java.util.LinkedHashMap<>();
-        if(!result.details.isEmpty()){f.addView(text("اقتراحات تفاصيل الطلب",19));for(java.util.Map.Entry<String,String> entry:result.details.entrySet()){CheckBox check=new CheckBox(this);check.setText(requestLabel(entry.getKey())+": "+entry.getValue());JSONObject prior=requests.optJSONObject(suggested);check.setChecked(prior==null||prior.optString(entry.getKey()).isEmpty());f.addView(check);requestOptions.put(entry.getKey(),check);}}
-        final AlertDialog[] holder=new AlertDialog[1];primary(button(f,"اعتماد المعلومات وحفظ العميل",()->{try{String number=phone.getText().toString().trim();String customerName=name.getText().toString().trim();if(customerName.isEmpty())customerName=Analysis.phone(number);seed.put("name",customerName).put("phone",number).put("business",activity.getSelectedItemPosition()==1?"survey":activity.getSelectedItemPosition()==2?"software":"");for(java.util.Map.Entry<String,CheckBox> option:options.entrySet())if(option.getValue().isChecked())seed.put(option.getKey(),values.get(option.getKey()));
-            android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();try{long id=store.save(seed);String selectedBusiness=seed.optString("business");JSONObject detail=requests.optJSONObject(selectedBusiness);if(detail==null)detail=new JSONObject();boolean changed=false;for(java.util.Map.Entry<String,CheckBox> option:requestOptions.entrySet())if(option.getValue().isChecked()&&allowedDetail(selectedBusiness,option.getKey())){detail.put(option.getKey(),result.details.get(option.getKey()));changed=true;}if(changed){requests.put(selectedBusiness,detail);store.request(id,requests);}store.reviewed(message.optLong("id"),id);db.setTransactionSuccessful();}finally{db.endTransaction();}holder[0].dismiss();render();Reminders.schedule(this);alert("حُفظ العميل والمعلومات المختارة");
-        }catch(android.database.sqlite.SQLiteConstraintException duplicate){alert("هذا الرقم موجود بالفعل. اختر العميل الموجود للربط.");}catch(Exception e){alert(e.getMessage()==null?"تعذر الحفظ":e.getMessage());}}));holder[0]=panel("اعتماد المعلومات",f);
-    }
-    private String requestLabel(String key){String[] keys={"device","model","service","condition","quantity","budget","program","platform","needs","plan","purchaseDate","calibrationDate","demoDate","subscriptionEnd"};String[] names={"الجهاز","الموديل","الخدمة","الحالة","الكمية","الميزانية","البرنامج","المنصة","الاحتياجات","الباقة","موعد الشراء","تجديد المعايرة","العرض التجريبي","انتهاء الاشتراك"};for(int i=0;i<keys.length;i++)if(keys[i].equals(key))return names[i];return key;}
-    private boolean allowedDetail(String business,String key){if(business.isEmpty())return false;String keys=business.equals("survey")?"|device|model|service|condition|quantity|budget|purchaseDate|calibrationDate|":"|program|platform|needs|plan|budget|demoDate|subscriptionEnd|";return keys.contains("|"+key+"|");}
-    private void pasteText(){LinearLayout f=form();EditText body=field(f,"الصق نص الرسالة أو المحادثة هنا","",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);body.setMinLines(8);new AlertDialog.Builder(this).setTitle("تحليل نص واتساب").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("تحليل",(d,w)->{String value=body.getText().toString();if(value.trim().isEmpty()||value.length()>100000){alert("أدخل نصًا حتى 100 ألف حرف");return;}saveSharedText(value,"");}).show();}
-    private void saveSharedText(String body,String subject){String key=TextFingerprint.of("share|"+subject+"|"+body.trim());long now=System.currentTimeMillis();store.message(key,subject,body,now,"نص واتساب مشترك",true);ArrayList<JSONObject> list=store.query("SELECT * FROM messages WHERE fingerprint=?",key);tab="messages";render();if(!list.isEmpty()&&list.get(0).optString("state").equals("pending"))review(list.get(0));else alert("هذا النص سبق حفظه ومراجعته");}
-    private void settings(){
-        content.addView(text("إعدادات التطبيق",24));
-        button(content,tr("اللغة: العربية","Language: English"),this::chooseLanguage);
-        primary(button(content,"الدفاتر والعهد والمصروفات",()->startActivity(new Intent(this,LedgerActivity.class))));
-        button(content,"التقارير والإحصاءات",()->startActivity(new Intent(this,ReportsActivity.class)));
-        button(content,"تصدير البيانات CSV",this::chooseCsvExport);
-        button(content,"إدارة المحتوى التسويقي",()->{tab="ads";render();});
-        primary(button(content,"بيانات المنشأة ونوع نشاطها",()->editProfile(business)));
-        LinearLayout screen=content;content=card(screen);muted(content,"عام وخصوصية");content.addView(text("بياناتك محفوظة على الهاتف. هذا التطبيق مستقل؛ لا يحتاج موقعًا أو اشتراك API، ولا يرسل العملاء أو الرسائل إلى الإنترنت.",16));
-        android.content.SharedPreferences preferences=getSharedPreferences("settings",0);
-        final android.content.SharedPreferences security=getSharedPreferences("settings",0);
-        Switch secure=new Switch(this);secure.setText("منع لقطات الشاشة والمعاينة في التطبيقات الأخيرة");secure.setChecked(security.getBoolean("secureScreen",false));secure.setOnCheckedChangeListener((v,on)->{security.edit().putBoolean("secureScreen",on).apply();if(on)getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);else getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);});content.addView(secure);
-        Switch lock=new Switch(this);lock.setText("طلب قفل الهاتف عند فتح التطبيق");lock.setChecked(security.getBoolean("appLock",false));lock.setOnCheckedChangeListener((v,on)->{android.app.KeyguardManager km=getSystemService(android.app.KeyguardManager.class);if(on&&!km.isDeviceSecure()){v.setChecked(false);alert("فعّل رمز قفل أو بصمة للهاتف أولًا، ثم أعد المحاولة.");return;}security.edit().putBoolean("appLock",on).apply();markUnlocked();});content.addView(lock);
-        button(content,"إضافة اختصار للشاشة الرئيسية",()->{ShortcutManager manager=getSystemService(ShortcutManager.class);if(!manager.isRequestPinShortcutSupported()){alert("اسحب أيقونة "+AppMode.BRAND+" من قائمة التطبيقات إلى الشاشة الرئيسية.");return;}manager.requestPinShortcut(new ShortcutInfo.Builder(this,"tawasul-crm").setShortLabel(AppMode.BRAND).setIcon(Icon.createWithResource(this,R.mipmap.ic_launcher)).setIntent(new Intent(this,MainActivity.class).setAction(Intent.ACTION_VIEW)).build(),null);});
-        button(content,"تحديث الأسماء من جهات الاتصال",this::requestContactNames);
-        button(content,"استيراد دليل جهات الاتصال من ملف VCF",this::openContactVcf);
-        button(content,"سياسة الخصوصية داخل التطبيق",this::privacyPolicy);
-        button(content,"فتح سياسة الخصوصية على الويب",this::openPrivacyPolicy);
-        content=card(screen);content.addView(text("تنبيهات المتابعة",18));
-        android.content.SharedPreferences reminderSettings=getSharedPreferences("settings",0);
-        Switch reminders=new Switch(this);reminders.setText("تفعيل تذكيرات المتابعة");reminders.setChecked(reminderSettings.getBoolean("reminders",true));reminders.setOnCheckedChangeListener((v,on)->{reminderSettings.edit().putBoolean("reminders",on).apply();if(on)enableNotifications();else{getSystemService(android.app.NotificationManager.class).cancelAll();Reminders.schedule(this);}});content.addView(reminders);
-        primary(button(content,"تفعيل إشعارات المتابعة",this::enableNotifications));
-        button(content,"إرسال إشعار تجريبي",()->{if(!Reminders.allowed(this)){alert("فعّل إذن الإشعارات أولًا من زر التفعيل");return;}Reminders.test(this);alert("أُرسل الإشعار التجريبي؛ افحص شريط الإشعارات.");});
-        button(content,"إعدادات إشعارات التطبيق",()->startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName())));
-        muted(content,Reminders.allowed(this)?"إشعارات التطبيق مسموحة":"الإشعارات غير مسموحة حاليًا — امنح الإذن لإظهار التذكير");
-        muted(content,"حدد تاريخ المتابعة ووقت التنبيه في بيانات العميل لأي نوع طلب. التذكير تقريبي وقد يتأخر مع توفير الطاقة؛ لا تُنبه الطلبات المكتملة أو المغلقة.");
-        content=card(screen);content.addView(text("المكالمات وجهات الاتصال",18));
-        muted(content,"استورد ملف CSV صادرًا من تطبيق الهاتف أو أداة النسخ الاحتياطي. تُدمج الأرقام المتكررة وتُقبل العناوين العربية والإنجليزية والفواصل المختلفة.");
-        primary(button(content,"اختيار ملف سجل المكالمات CSV",this::chooseCallCsv));
-        if(BuildConfig.DIRECT_CALL_LOG){
-            muted(content,"ميزات الإصدار المباشر — غير مخصصة لنسخة Google Play");
-            button(content,"إعداد الاستيراد المباشر من الهاتف",this::callSetup);
-            RoleManager callRole=getSystemService(RoleManager.class);muted(content,callRole.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)&&callRole.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)?"استقبال أرقام المكالمات: الدور ممنوح":"استقبال أرقام المكالمات: الدور غير ممنوح");muted(content,checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED?"سجل المكالمات: الوصول مسموح":"سجل المكالمات: الوصول غير ممنوح");
-            Switch sync=new Switch(this);sync.setText("تحديث السجل تلقائيًا عند فتح التطبيق");sync.setChecked(preferences.getBoolean("autoSync",false));sync.setOnCheckedChangeListener((v,on)->preferences.edit().putBoolean("autoSync",on).apply());content.addView(sync);
-            Switch calls=new Switch(this);calls.setText("إضافة أرقام المكالمات السعودية الجديدة");calls.setChecked(preferences.getBoolean("calls",false));calls.setOnCheckedChangeListener((v,on)->preferences.edit().putBoolean("calls",on).apply());content.addView(calls);
-            button(content,"تفعيل تحديد هوية المتصل",()->{RoleManager role=getSystemService(RoleManager.class);if(role.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING))startActivityForResult(role.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING),11);else alert("هذا الدور غير متاح على الهاتف");});
-            button(content,"استيراد سجل الهاتف مباشرة",()->new AlertDialog.Builder(this).setMessage("سيُقرأ سجل المكالمات وتُحفظ الأرقام السعودية وأسماؤها محليًا. هل تريد البدء؟").setNegativeButton("إلغاء",null).setPositiveButton("استيراد",(d,w)->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED)importHistory();else requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG},12);}).show());
-        }else muted(content,"هذه نسخة المتجر: لا تطلب إذن سجل المكالمات المقيد، بما يتوافق مع سياسة Google Play.");
-        content=card(screen);content.addView(text("رسائل واتساب",18));
-        content.addView(text("واتساب: المشاركة اليدوية فقط. لا يطلب هذا الإصدار الوصول إلى الإشعارات ولا يقرأها في الخلفية. شارك نص الرسالة أو ملف TXT إلى عملائي ثم راجع المعلومات قبل الحفظ.",16));
-        content=card(screen);content.addView(text("النسخ الاحتياطي",18));
-        primary(button(content,"إنشاء نسخة احتياطية مشفرة",this::chooseBackupPassword));
-        button(content,"استعادة نسخة احتياطية",()->new AlertDialog.Builder(this).setMessage("الاستعادة تستبدل العملاء والرسائل والمنشورات وملفات المنشآت في النسخ الجديدة. أنشئ نسخة احتياطية أولًا.").setNegativeButton("إلغاء",null).setPositiveButton("اختيار النسخة",(d,w)->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE),21)).show());
-        content.addView(text("النسخ الجديدة محمية بكلمة مرور وتشفير AES‑256‑GCM. لا يمكن استعادة كلمة المرور إذا فُقدت.",14));
-        content=screen;
-        content.addView(text(preferences.getString("status",""),16));
-        content.addView(text("التحليل محلي بالكلمات والصيغ: اقتراح اهتمام ونشاط وموعد وبريد ورقم. ليس تحليلًا سحابيًا بالذكاء الاصطناعي. البحث الخارجي عن معلومات الأرقام غير مفعل.",14));
-    }
-    private void switchLanguage(){AppLanguage.set(this,!AppLanguage.english(this));Intent launch=new Intent(this,MainActivity.class);launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);startActivity(launch);finish();}
-    private void chooseLanguage(){boolean current=AppLanguage.english(this);String[] choices={"العربية","English"};new AlertDialog.Builder(this).setTitle(tr("لغة التطبيق","App language")).setSingleChoiceItems(choices,current?1:0,(dialog,which)->{boolean selected=which==1;if(selected==current){dialog.dismiss();return;}AppLanguage.set(this,selected);dialog.dismiss();Intent launch=new Intent(this,MainActivity.class);launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);startActivity(launch);finish();}).setNegativeButton(tr("إلغاء","Cancel"),null).show();}
-    private void privacyPolicy(){LinearLayout f=form();f.addView(text("سياسة الخصوصية",24));f.addView(text("يعمل "+AppMode.BRAND+" محليًا على جهازك ولا يطلب إذن الإنترنت. لا يرسل بيانات العملاء أو جهات الاتصال أو الرسائل أو النسخ الاحتياطية إلى خوادم المطور.",15));muted(f,"الأذونات واستخدامها");f.addView(text("• جهات الاتصال: اختيارية، وتُستخدم محليًا لمطابقة رقم العميل بالاسم أو تجهيز حفظه في الهاتف.\n• الإشعارات: لتنبيهات المتابعة التي تفعّلها.\n• سجل المكالمات: لا تطلبه نسخة Google Play؛ يوجد فقط في الإصدار المباشر المنفصل خارج المتجر.",14));muted(f,"الحفظ والحذف");f.addView(text("تُحفظ البيانات داخل مساحة التطبيق المعزولة. يمكنك حذف السجلات، أو مسح بيانات التطبيق من إعدادات Android، أو إزالة التطبيق. النسخ الاحتياطية مشفرة بكلمة مرور يحددها المستخدم ولا يستطيع المطور استعادتها.",14));muted(f,"الحماية والمشاركة");f.addView(text("لا توجد حسابات أو إعلانات أو أدوات تحليل أو تتبع. لا تنتقل البيانات إلى تطبيق خارجي إلا عندما تختار أنت المشاركة عبر واتساب أو البريد أو غيرهما.",14));button(f,"عرض السياسة الكاملة على الويب",this::openPrivacyPolicy);muted(f,"آخر تحديث: 8 أكتوبر 2026 • للتواصل: enginex@enginex2030.com");panel("الخصوصية والأمان",f);}
-    private void openPrivacyPolicy(){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(BuildConfig.PRIVACY_POLICY_URL)));}catch(Exception e){alert("تعذر فتح المتصفح. الرابط: "+BuildConfig.PRIVACY_POLICY_URL);}}
-    private void chooseCallCsv(){if(checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED){contactDisclosure(14,this::openCallCsv);return;}openCallCsv();}
-    private void openCallCsv(){Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("text/*").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(intent,31);}
-    private void openContactVcf(){Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("text/x-vcard").putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"text/x-vcard","text/vcard","text/directory","text/plain"}).addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(intent,32);}
-    private void requestContactNames(){if(checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED){contactDisclosure(10,null);return;}syncContactNames(true,null);}
-    private void contactDisclosure(int request,Runnable withoutContacts){new AlertDialog.Builder(this).setTitle("استخدام جهات الاتصال").setMessage("سيقرأ تواصل أسماء وأرقام جهات الاتصال من هاتفك لمطابقة أرقام العملاء بالأسماء محليًا. لا تُرسل جهات الاتصال إلى المطور أو إلى خادم، ويمكنك متابعة استخدام التطبيق دون هذا الإذن.").setNegativeButton(withoutContacts==null?"ليس الآن":"المتابعة دون أسماء",(dialog,which)->{if(withoutContacts!=null)withoutContacts.run();}).setPositiveButton("متابعة",(dialog,which)->requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},request)).show();}
-    private void syncContactNames(boolean announce,Runnable after){backgroundOps++;new Thread(()->{java.util.Map<String,String> contacts=PhoneData.contacts(getApplicationContext());int updated;try{store.cacheContactNames(contacts);updated=store.refreshContactNames(contacts);}catch(Exception e){updated=-1;}final int count=updated;runOnUiThread(()->{backgroundOps--;if(isFinishing()||isDestroyed())return;render();if(announce)alert(count<0?"تعذر تحديث الأسماء الآن؛ أعد المحاولة بعد قليل":contacts.isEmpty()?"لم يعثر التطبيق على جهات اتصال سعودية قابلة للقراءة":count>0?"تم حفظ دليل جهات الاتصال وتحديث أسماء "+count+" سجلًا موجودًا":"تم حفظ دليل جهات الاتصال. لا توجد أرقام مطابقة في الوارد أو العملاء الحاليين بعد.");if(after!=null)after.run();});},"contact-name-sync").start();}
-    private void importCallCsv(Uri uri){if(importing)return;importing=true;History.status(this,"جارٍ فحص ملف سجل المكالمات…");backgroundOps++;new Thread(()->{String message;try{message=CallCsvImporter.run(getApplicationContext(),read(uri,5*1024*1024)).message();}catch(Exception e){message="تعذر استيراد الملف: "+(e.getMessage()==null?"تحقق من صيغة CSV":e.getMessage());}String result=message;runOnUiThread(()->{backgroundOps--;importing=false;if(isFinishing()||isDestroyed())return;History.status(this,result);tab="unassigned";render();alert(result);});},"call-csv-import").start();}
-    private void importContactVcf(Uri uri){backgroundOps++;new Thread(()->{String message;try{java.util.Map<String,String> contacts=VCardImporter.parse(read(uri,15*1024*1024));store.cacheContactNames(contacts);int updated=store.refreshContactNames(contacts);message="تم حفظ "+contacts.size()+" اسمًا ورقمًا سعوديًا في دليل جهات الاتصال المحلي، وتحديث أسماء "+updated+" سجلًا موجودًا. لا تُضاف جهات الاتصال كعملاء تلقائيًا؛ ستظهر أسماؤها عند استيراد سجل مكالمات مطابق.";}catch(Exception e){message="تعذر استيراد جهات الاتصال: "+(e.getMessage()==null?"تحقق من ملف VCF":e.getMessage());}String result=message;runOnUiThread(()->{backgroundOps--;if(isFinishing()||isDestroyed())return;render();alert(result);});},"contact-vcf-import").start();}
-    private void importHistory(){getSharedPreferences("settings",0).edit().putLong("historyId",0).apply();syncHistory(true);}
-    private void syncHistory(boolean showResult){if(importing)return;importing=true;getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();History.status(this,"جارٍ إنشاء العملاء من سجل المكالمات…");backgroundOps++;new Thread(()->{History.run(getApplicationContext());runOnUiThread(()->{backgroundOps--;importing=false;if(isFinishing()||isDestroyed())return;if(showResult)tab="unassigned";render();if(showResult)alert(getSharedPreferences("settings",0).getString("status",""));});},"history").start();}
-    private void callSetup(){LinearLayout f=form();muted(f,"يُنشأ العميل تلقائيًا من الرقم والاسم المتاح. لن تُطلب منك بقية البيانات. سيُحدّث السجل عند فتح التطبيق إذا سمح الهاتف بالوصول إليه.");Spinner activity=spinner(f,"النشاط الافتراضي للأرقام الجديدة",new String[]{"اتركه غير محدد للمراجعة الجماعية","أجهزة المساحة","البرامج والتطبيقات"},getSharedPreferences("settings",0).getString("newBusiness","").equals("survey")?1:getSharedPreferences("settings",0).getString("newBusiness","").equals("software")?2:0);activity.setSelection(AppMode.MODE.equals("survey")?1:2);activity.setEnabled(false);new AlertDialog.Builder(this).setTitle("إعداد المكالمات").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("تفعيل واستيراد",(d,w)->{getSharedPreferences("settings",0).edit().putBoolean("calls",true).putBoolean("autoSync",true).putString("newBusiness",activity.getSelectedItemPosition()==1?"survey":activity.getSelectedItemPosition()==2?"software":"").apply();RoleManager role=getSystemService(RoleManager.class);if(role.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)&&!role.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)){getSharedPreferences("settings",0).edit().putBoolean("setupPending",true).apply();startActivityForResult(role.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING),11);}else requestCallPermissions();}).show();}
-    private void requestCallPermissions(){if(!BuildConfig.DIRECT_CALL_LOG){openCallCsv();return;}if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED)importHistory();else requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);}
-    private void assignCalls(){if(selectedCalls.isEmpty()){alert("حدد الأرقام التي تريد اعتمادها أولًا");return;}int n=store.assign(new java.util.ArrayList<>(selectedCalls),AppMode.MODE);selectedCalls.clear();render();alert("تم اعتماد "+n+" رقمًا كعملاء");}
-    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){super.onRequestPermissionsResult(request,permissions,grants);if(request==13){Reminders.channel(this);Reminders.deliver(this);Reminders.schedule(this);render();if(grants.length==0||grants[0]!=PackageManager.PERMISSION_GRANTED)alert("لم يُمنح إذن الإشعارات. تبقى المتابعات ظاهرة في قائمة اليوم.");}if(request==12){if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED)importHistory();else alert("لم يُمنح إذن السجل. يمكنك إضافة العملاء يدويًا واستقبال المكالمات الجديدة عند تفعيل دور تحديد المتصل.");}if(request==10){if(checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED)syncContactNames(true,null);else alert("لم يُمنح إذن جهات الاتصال؛ لن تظهر الأسماء المسجلة على الهاتف.");}if(request==14){if(checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED)syncContactNames(false,this::openCallCsv);else{alert("سيُستورد الملف دون أسماء الهاتف لأن إذن جهات الاتصال لم يُمنح.");openCallCsv();}}}
-    private String read(Uri uri,int max) throws Exception {if(!"content".equals(uri.getScheme()))throw new IllegalArgumentException("اختر ملفًا من مدير المستندات");try(java.io.InputStream input=getContentResolver().openInputStream(uri);java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){if(input==null)throw new java.io.IOException();byte[] buffer=new byte[4096];int n;while((n=input.read(buffer))!=-1){bytes.write(buffer,0,n);if(bytes.size()>max)throw new IllegalArgumentException("الملف أكبر من الحد المسموح");}return TextDecoder.decode(bytes.toByteArray());}}
-
-    private byte[] backupBytes() throws Exception {try(Store snapshot=new Store(getApplicationContext())){byte[] data=snapshot.backup().toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8);if(data.length>MAX_BACKUP_BYTES)throw new IllegalArgumentException("حجم النسخة يتجاوز 25 ميغابايت؛ احذف الرسائل أو الصور غير اللازمة ثم أعد المحاولة");return data;}catch(java.lang.OutOfMemoryError e){throw new IllegalArgumentException("النسخة أكبر من ذاكرة الهاتف؛ احذف الرسائل أو الصور غير اللازمة ثم أعد المحاولة");}}
-    private void chooseBackupPassword(){LinearLayout f=form();EditText password=field(f,"كلمة المرور — 8 أحرف على الأقل","",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD),confirm=field(f,"تأكيد كلمة المرور","",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);new AlertDialog.Builder(this).setTitle("حماية النسخة الاحتياطية").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("اختيار مكان الحفظ",(d,w)->{String a=password.getText().toString(),b=confirm.getText().toString();if(a.length()<8||!a.equals(b)){alert("كلمتا المرور غير متطابقتين أو أقصر من 8 أحرف");return;}pendingBackupPassword=a.toCharArray();Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").putExtra(Intent.EXTRA_TITLE,"engineering-crm-backup.ecrm").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(intent,20);}).show();}
-    private void chooseCsvExport(){new AlertDialog.Builder(this).setTitle("تصدير CSV").setMessage("يحتوي الملف أرقام العملاء وبياناتهم، وهو غير مشفر. اختر مكان حفظ آمنًا ولا تشاركه إلا عند الحاجة.").setNegativeButton("إلغاء",null).setPositiveButton("متابعة",(d,w)->chooseCsvKind()).show();}
-    private void chooseCsvKind(){new AlertDialog.Builder(this).setTitle("اختر البيانات المراد تصديرها").setItems(new String[]{"العملاء","عروض الأسعار","بنود الدفاتر"},(d,which)->{pendingCsv=which==0?"customers":which==1?"quotes":"ledger";String name=pendingCsv.equals("customers")?"customers.csv":pendingCsv.equals("quotes")?"quotes.csv":"ledger.csv";startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("text/csv").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,name),41);}).setNegativeButton("إلغاء",null).show();}
-    private void writeCsv(Uri uri){String kind=pendingCsv;pendingCsv=null;if(kind==null)return;backgroundOps++;new Thread(()->{String result;try{byte[] content;if(kind.equals("customers"))content=CsvExport.customers(store.query("SELECT * FROM leads WHERE business=? ORDER BY id DESC",AppMode.MODE));else if(kind.equals("quotes")){ArrayList<JSONObject> quotes=new ArrayList<>();for(JSONObject row:store.query("SELECT * FROM quotes ORDER BY id DESC"))quotes.add(new JSONObject(row.getString("data")));content=CsvExport.quotes(quotes);}else content=CsvExport.ledger(store.query("SELECT * FROM ledgerEntries ORDER BY at DESC,id DESC"));try(java.io.OutputStream out=getContentResolver().openOutputStream(uri)){if(out==null)throw new java.io.IOException();out.write(content);}result="تم تصدير CSV بنجاح";}catch(Exception e){result="تعذر تصدير CSV؛ تحقق من المساحة ومكان الحفظ";}String message=result;runOnUiThread(()->{backgroundOps--;if(!isFinishing())alert(message);});},"csv-export").start();}
-    private void writeEncryptedBackup(Uri uri){char[] password=pendingBackupPassword;pendingBackupPassword=null;if(password==null){alert("أعد إنشاء النسخة وحدد كلمة مرور");return;}backgroundOps++;new Thread(()->{String message;try{byte[] encrypted=BackupCipher.encrypt(backupBytes(),password);try(java.io.OutputStream output=getContentResolver().openOutputStream(uri)){if(output==null)throw new java.io.IOException();output.write(encrypted);}message="حُفظت النسخة الاحتياطية المشفرة";}catch(Exception e){message="تعذر حفظ النسخة المشفرة: "+(e.getMessage()==null?"تحقق من الملف والمساحة":e.getMessage());}finally{java.util.Arrays.fill(password,'\0');}String result=message;runOnUiThread(()->{backgroundOps--;if(isFinishing()||isDestroyed())return;alert(result);});},"encrypted-backup").start();}
-    private void restoreSelected(Uri uri){backgroundOps++;new Thread(()->{String raw;boolean encrypted;try{raw=read(uri,MAX_ENCRYPTED_BACKUP_BYTES);encrypted=BackupCipher.encrypted(raw);}catch(Exception e){final String detail=e.getMessage()==null?"تحقق من الملف":e.getMessage();runOnUiThread(()->{backgroundOps--;if(isFinishing()||isDestroyed())return;alert("تعذر قراءة النسخة: "+detail);});return;}final String contents=raw;runOnUiThread(()->{backgroundOps--;if(isFinishing()||isDestroyed())return;askRestorePassword(contents,encrypted);});},"restore-read").start();}
-    private void askRestorePassword(String raw,boolean encrypted){if(!encrypted){new AlertDialog.Builder(this).setTitle("نسخة قديمة غير مشفرة").setMessage("هذا الملف غير مشفر وقد يحتوي بيانات حساسة بنص مقروء. هل تريد استيراده ثم إنشاء نسخة مشفرة جديدة؟").setNegativeButton("إلغاء",null).setPositiveButton("استيراد",(d,w)->restoreDocument(raw,null)).show();return;}LinearLayout f=form();EditText password=field(f,"كلمة مرور النسخة","",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);new AlertDialog.Builder(this).setTitle("فك تشفير النسخة").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("استعادة",(d,w)->restoreDocument(raw,password.getText().toString().toCharArray())).show();}
-    private void restoreDocument(String raw,char[] password){backgroundOps++;new Thread(()->{String message;boolean ok=false;try{byte[] bytes=password==null?raw.getBytes(java.nio.charset.StandardCharsets.UTF_8):BackupCipher.decrypt(raw,password);store.restore(new JSONObject(new String(bytes,java.nio.charset.StandardCharsets.UTF_8)));getSharedPreferences("settings",0).edit().putLong("historyId",0).apply();message="اكتملت الاستعادة";ok=true;}catch(Exception e){message="تعذر استعادة النسخة: "+(e.getMessage()==null?"تحقق من كلمة المرور والملف":e.getMessage());}finally{if(password!=null)java.util.Arrays.fill(password,'\0');}boolean success=ok;String result=message;runOnUiThread(()->{backgroundOps--;if(isFinishing()||isDestroyed())return;if(success){getSystemService(android.app.NotificationManager.class).cancelAll();render();Reminders.schedule(this);}alert(result);});},"encrypted-restore").start();}
-    private void receive(Intent intent){long open=intent.getLongExtra("openLead",0);if(open>0){JSONObject item=store.lead(open);if(item.optLong("id")>0){business=AppMode.MODE;requestFilter=0;tab="today";render();edit(item,0);}intent.removeExtra("openLead");}if(!Intent.ACTION_SEND.equals(intent.getAction()))return;intent.setAction(Intent.ACTION_VIEW);final String shared=intent.getStringExtra(Intent.EXTRA_TEXT);final String sender=intent.getStringExtra(Intent.EXTRA_SUBJECT);final Uri stream=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(stream==null){saveShared(shared,sender);return;}backgroundOps++;new Thread(()->{String body;String error=null;try{body=read(stream,1024*1024);}catch(Exception e){body=null;error=e.getMessage();}final String text=body;final String failure=error;runOnUiThread(()->{backgroundOps--;if(isFinishing()||isDestroyed())return;if(failure!=null){alert("تعذر قراءة المشاركة؛ جرّب مشاركة نص الرسالة فقط");return;}saveShared(text,sender);});},"shared-read").start();}
-    private void saveShared(String body,String sender){if(body==null||body.trim().isEmpty()){alert("شارك نص رسالة أو ملف محادثة نصيًا دون الوسائط");return;}if(body.length()>100000){alert("المحادثة طويلة جدًا؛ شارك جزءًا أصغر (حتى 100 ألف حرف)");return;}saveSharedText(body,sender==null?"":sender);}
-    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==40){if(result==RESULT_OK)render();return;}if(request==20&&result!=RESULT_OK&&pendingBackupPassword!=null){java.util.Arrays.fill(pendingBackupPassword,'\0');pendingBackupPassword=null;return;}if(request==30){if(postDraft==null)return;if(result==RESULT_OK&&data!=null&&data.getData()!=null)try{postDraft.put("image",PostMedia.importUri(this,data.getData()));}catch(Exception e){alert(e.getMessage()==null?"تعذر إضافة الصورة":e.getMessage());}editPost(postDraft);return;}if(request==11&&getSharedPreferences("settings",0).getBoolean("setupPending",false)){getSharedPreferences("settings",0).edit().putBoolean("setupPending",false).apply();requestCallPermissions();return;}if(result!=RESULT_OK||data==null||data.getData()==null)return;if(request==31){importCallCsv(data.getData());return;}if(request==32){importContactVcf(data.getData());return;}try{
-        if(request==20){writeEncryptedBackup(data.getData());return;}
-        if(request==41){writeCsv(data.getData());return;}
-        if(request==21){restoreSelected(data.getData());return;}
-    }catch(Exception e){alert("تعذر حفظ أو استعادة النسخة: "+(e.getMessage()==null?"تحقق من الملف والمساحة":e.getMessage())+". عند فشل الاستعادة لا تُستبدل قاعدة البيانات جزئيًا.");}}
-
-    private void followAction(long id,boolean tomorrow){new AlertDialog.Builder(this).setMessage(tomorrow?"تأجيل موعد المتابعة المحفوظ إلى الغد بنفس الوقت؟":"تسجيل إتمام المتابعة وإزالة الموعد الحالي؟").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(d,w)->{try{store.finishFollowUp(id,tomorrow);getSystemService(android.app.NotificationManager.class).cancel("lead",(int)id);Reminders.schedule(this);render();alert(tomorrow?"تم تأجيل المتابعة. أعد فتح العميل لرؤية الموعد الجديد.":"تم إتمام المتابعة. أعد فتح العميل لرؤية التحديث.");}catch(Exception e){alert("تعذر تحديث الموعد");}}).show();}
-    private AlertDialog panel(String title,LinearLayout form){ScrollView scroll=new ScrollView(this);scroll.addView(form);AlertDialog d=new AlertDialog.Builder(this).setTitle(title).setView(scroll).setNegativeButton("إغلاق",null).create();d.show();d.getWindow().setBackgroundDrawable(shape(Color.WHITE,20,0));d.getWindow().setLayout(-1,-1);return d;}
-    private LinearLayout form(){LinearLayout f=column();f.setLayoutDirection(AppLanguage.direction(this));f.setPadding(dp(20),dp(12),dp(20),dp(20));return f;}
-    private void timeline(long id){
-        JSONObject lead=store.lead(id);LinearLayout f=form();f.addView(text(lead.optString("name"),22));muted(f,"المكالمات المسجلة والملاحظات والتغييرات — أحدث 200 تعامل");
-        EditText note=field(f,"أضف ملاحظة للتعامل", "",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        final AlertDialog[] holder=new AlertDialog[1];primary(button(f,"حفظ الملاحظة",()->{String value=note.getText().toString().trim();if(value.isEmpty()){alert("اكتب الملاحظة أولًا");return;}store.event(id,"note",value,System.currentTimeMillis(),null);holder[0].dismiss();timeline(id);}));
-        ArrayList<JSONObject> items=store.query("SELECT * FROM events WHERE leadId=? ORDER BY at DESC,id DESC LIMIT 200",String.valueOf(id));
-        if(items.isEmpty())muted(f,"لا يوجد سجل تعاملات بعد. التحديث لا يستنتج أحداثًا قديمة لم تُسجّل.");
-        for(JSONObject item:items){LinearLayout box=card(f);muted(box,android.text.format.DateFormat.format("yyyy-MM-dd HH:mm",item.optLong("at")).toString());TextView body=text(item.optString("body"),15);body.setTextIsSelectable(true);box.addView(body);}
-        holder[0]=panel("سجل التعاملات",f);
-    }
-    private void requestDetails(long id){
-        JSONObject lead=store.lead(id);String activity=lead.optString("business");if(activity.isEmpty()){alert("حدد نشاط العميل واحفظه أولًا");return;}
-        JSONObject all;try{all=new JSONObject(lead.optString("requestDetails","{}"));}catch(Exception e){all=new JSONObject();}final JSONObject details=all;JSONObject values=all.optJSONObject(activity);if(values==null)values=new JSONObject();
-        String[][] fields=activity.equals("survey")?SurveyRequests.fields(lead.optString("requestType","sales")):new String[][]{{"program","البرنامج المطلوب"},{"platform","سحابي / مكتبي / تطبيق"},{"needs","احتياجات العميل"},{"demoDate","موعد العرض التجريبي (YYYY-MM-DD)"},{"plan","الباقة المطلوبة"},{"budget","الميزانية المتوقعة (ريال)"},{"subscriptionEnd","انتهاء الاشتراك (YYYY-MM-DD)"}};
-        LinearLayout f=form();f.addView(text(activity.equals("survey")?"طلب أجهزة المساحة":"طلب البرامج والتطبيقات",22));muted(f,"تفاصيل خاصة بالنشاط المحفوظ لهذا العميل");if(activity.equals("survey"))muted(f,"نوع الطلب الحالي: "+SurveyRequests.label(lead.optString("requestType","sales"))+" • عدله من بيانات العميل");java.util.Map<String,EditText> inputs=new java.util.LinkedHashMap<>();
-        for(String[] item:fields){int type=item[0].equals("quantity")?android.text.InputType.TYPE_CLASS_NUMBER:item[0].equals("budget")?android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL:item[0].equals("issue")||item[0].equals("workDone")?android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE:android.text.InputType.TYPE_CLASS_TEXT;inputs.put(item[0],field(f,item[1],values.optString(item[0]),type));}
-        final JSONObject savedValues=values;final AlertDialog[] holder=new AlertDialog[1];primary(button(f,"حفظ تفاصيل الطلب",()->{try{JSONObject data=new JSONObject(savedValues.toString());for(String[] item:fields){String value=inputs.get(item[0]).getText().toString().trim();if(!value.isEmpty()&&(item[0].endsWith("Date")||item[0].equals("subscriptionEnd")))LocalDate.parse(value);if(!value.isEmpty()&&item[0].equals("quantity")&&Integer.parseInt(value)<1)throw new IllegalArgumentException("الكمية يجب أن تكون أكبر من صفر");if(!value.isEmpty()&&item[0].equals("budget")&&new java.math.BigDecimal(value).signum()<0)throw new IllegalArgumentException("الميزانية غير صالحة");data.put(item[0],value);}details.put(activity,data);store.request(id,details);holder[0].dismiss();alert("حُفظت تفاصيل الطلب");}catch(Exception e){alert("تحقق من الكمية والميزانية والتواريخ بصيغة YYYY-MM-DD");}}));holder[0]=panel("تفاصيل الطلب",f);
-    }
-    private void templates(long id){JSONObject lead=store.lead(id);String interest=lead.optString("interest");if(interest.isEmpty())interest=lead.optString("business").equals("software")?"البرنامج المطلوب":"الجهاز أو الخدمة المطلوبة";
-        String intro="السلام عليكم "+lead.optString("name")+"،\n";
-        String[] titles=lead.optString("business").equals("survey")&&!lead.optString("requestType","sales").equals("sales")?new String[]{"متابعة طلب الخدمة","متابعة تفاصيل الطلب","تأكيد موعد","متابعة بعد إتمام الخدمة"}:new String[]{"متابعة الاهتمام","متابعة عرض السعر","تأكيد موعد","متابعة بعد البيع"};
-        String[] bodies={intro+"يسعدنا متابعة طلبك بخصوص "+interest+". هل توجد تفاصيل إضافية أو استفسارات يمكننا مساعدتك بها؟",intro+"نود متابعة عرض السعر الخاص بـ "+interest+". هل اطلعت عليه، وهل ترغب في توضيح أي بند؟",intro+"نود تأكيد موعد المتابعة "+(lead.optString("followUp").isEmpty()?"[اكتب التاريخ والوقت]":lead.optString("followUp")+" "+lead.optString("followTime","09:00"))+" بخصوص "+interest+". هل الموعد مناسب لك؟",intro+"نتمنى أن تكون تجربتك مع "+interest+" جيدة. هل تحتاج أي مساعدة أو متابعة إضافية؟"};
-        if(lead.optString("business").equals("survey")&&!lead.optString("requestType","sales").equals("sales"))bodies[1]=intro+"نتابع طلب "+SurveyRequests.label(lead.optString("requestType"))+" بخصوص "+interest+". هل توجد تفاصيل إضافية عن الجهاز أو المشكلة؟";
-        java.util.ArrayList<String> allTitles=new java.util.ArrayList<>();java.util.ArrayList<String> allBodies=new java.util.ArrayList<>();for(int i=0;i<titles.length;i++){allTitles.add(titles[i]);allBodies.add(bodies[i]);}JSONObject profile=store.profile(AppMode.MODE);org.json.JSONArray custom=TemplateStore.custom(profile);for(int i=0;i<custom.length();i++){JSONObject item=custom.optJSONObject(i);if(item!=null){allTitles.add(item.optString("title","قالب مخصص"));allBodies.add(item.optString("body"));}}final String[] menu=new String[allTitles.size()+1];for(int i=0;i<allTitles.size();i++)menu[i]=allTitles.get(i);menu[menu.length-1]="إدارة القوالب المخصصة";new AlertDialog.Builder(this).setTitle("اختر قالب رسالة").setItems(menu,(d,which)->{if(which==menu.length-1){editTemplates();return;}LinearLayout f=form();EditText body=field(f,"راجع النص وعدّله قبل الإرسال",WhatsAppTemplates.fill(allBodies.get(which),lead,null),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);body.setMinLines(7);muted(f,"فتح واتساب يجهز النص فقط. تضغط إرسال داخل واتساب بنفسك.");final String title=menu[which];new AlertDialog.Builder(this).setTitle(title).setView(f).setNegativeButton("إلغاء",null).setNeutralButton("نسخ النص",(dialog,w)->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("رسالة العميل",body.getText().toString()));}).setPositiveButton("فتح واتساب",(dialog,w)->{String phone=lead.optString("phone");if(phone.isEmpty()||phone.equals("null")){alert("أضف رقم العميل أو استخدم نسخ النص");return;}try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/"+phone.replace("+","")+"?text="+Uri.encode(body.getText().toString()))));store.event(id,"template","تجهيز قالب واتساب: "+title+" — لا يؤكد إرسال الرسالة",System.currentTimeMillis(),null);}catch(Exception e){alert("تعذر فتح واتساب؛ استخدم نسخ النص");}}).show();}).show();
+        if (this.adLimit > 20) {
+            button(this.content, "الصفحة السابقة", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$advertising$117();
+                }
+            });
+        }
+        if (arrayListQuery.size() > 20) {
+            button(this.content, "الصفحة التالية", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$advertising$118();
+                }
+            });
+        }
     }
 
-    private void editTemplates(){LinearLayout f=form();EditText title=field(f,"اسم القالب","",1),body=field(f,"نص القالب — استخدم {الاسم} و{الشركة} و{رقم_العرض} و{المبلغ}","",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);body.setMinLines(6);new AlertDialog.Builder(this).setTitle("إضافة قالب واتساب مخصص").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("حفظ",(d,w)->{try{if(title.getText().toString().trim().isEmpty()||body.getText().toString().trim().isEmpty())throw new IllegalArgumentException("أدخل الاسم والنص");JSONObject p=store.profile(AppMode.MODE);org.json.JSONArray templates=TemplateStore.custom(p);templates.put(new JSONObject().put("title",title.getText().toString().trim()).put("body",body.getText().toString().trim()));p.put("whatsappTemplates",templates);store.saveProfile(AppMode.MODE,p);alert("حُفظ القالب المخصص");}catch(Exception e){alert(e.getMessage()==null?"تعذر حفظ القالب":e.getMessage());}}).show();}
-
-    private static final String[] POST_CATEGORIES={"تعريف","عرض","معلومة","نصيحة","مقارنة","تجربة استخدام"};
-    private void advertising(){
-        content.addView(text(business.equals("survey")?"دعاية أجهزة المساحة":"دعاية البرامج والتطبيقات",24));
-        JSONObject company=store.profile(business);muted(content,company.optString("name").isEmpty()?"أضف بيانات منشأة هذا النشاط":company.optString("name"));button(content,"بيانات المنشأة ونوع نشاطها",()->editProfile(business));muted(content,"مكتبة مستقلة لهذا النشاط • صور ونصوص جاهزة للمشاركة");
-        JSONObject total=store.query("SELECT COUNT(*) AS total,SUM(CASE WHEN lastPreparedAt=0 THEN 1 ELSE 0 END) AS unused,SUM(CASE WHEN plannedDate<>'' AND plannedDate<=? THEN 1 ELSE 0 END) AS due FROM posts WHERE business=?",LocalDate.now().toString(),business).get(0);LinearLayout stats=row();content.addView(stats);metric(stats,"منشورات",total.optInt("total"),BLUE);metric(stats,"لم تُفتح",total.optInt("unused"),0xFF348C76);metric(stats,"مخطط لها",total.optInt("due"),0xFFD69538);
-        primary(button(content,"+  إضافة صورة أو منشور",()->{try{editPost(new JSONObject().put("business",business));}catch(Exception e){alert("تعذر فتح المحرر");}}));button(content,"تجهيز ثلاث صيغ للنص",this::adCopy);
-        Spinner filter=spinner(content,"عرض المكتبة",new String[]{"كل المنشورات","المخطط لليوم والمتأخر","لم يُفتح للمشاركة بعد"},adFilter);filter.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int i,long id){if(adFilter!=i){adFilter=i;adLimit=20;render();}}});
-        muted(content,"تاريخ المشاركة يعني فتح نافذة المشاركة؛ لا يثبت إرسال المنشور. يوم النشر تخطيط فقط، ولا يُرسل التطبيق تلقائيًا.");
-        String condition=adFilter==1?" AND plannedDate<>'' AND plannedDate<=?":adFilter==2?" AND lastPreparedAt=0":"";ArrayList<JSONObject> posts=adFilter==1?store.query("SELECT * FROM posts WHERE business=?"+condition+" ORDER BY plannedDate,createdAt DESC LIMIT 21 OFFSET "+(adLimit-20),business,LocalDate.now().toString()):store.query("SELECT * FROM posts WHERE business=?"+condition+" ORDER BY createdAt DESC LIMIT 21 OFFSET "+(adLimit-20),business);
-        if(posts.isEmpty())empty("جهّز أول منشور لهذا النشاط","أضف صورة من هاتفك ونصًا قصيرًا؛ ستجده هنا عند الحاجة");int count=0;for(JSONObject post:posts){if(count++>=20)break;LinearLayout box=card(content);box.addView(text(post.optString("title"),20));box.addView(pill(post.optString("category"),BLUE,0xFFE7F3F2));showPostImage(box,post.optString("image"));String body=post.optString("body");if(!body.isEmpty()){TextView caption=text(body.length()>650?body.substring(0,650)+"…":body,14);caption.setTextIsSelectable(true);box.addView(caption);}if(!post.optString("plannedDate").isEmpty())muted(box,"يوم النشر المخطط: "+post.optString("plannedDate"));muted(box,post.optLong("lastPreparedAt")==0?"لم تُفتح المشاركة بعد":"آخر فتح للمشاركة: "+android.text.format.DateFormat.format("yyyy-MM-dd HH:mm",post.optLong("lastPreparedAt")));
-            primary(button(box,"مشاركة الصورة والنص",()->sharePost(post)));LinearLayout actions=row();box.addView(actions);Button edit=button(actions,"تعديل",()->editPost(post));edit.setLayoutParams(new LinearLayout.LayoutParams(0,dp(44),1));Button copy=button(actions,"نسخة جديدة",()->{try{JSONObject duplicate=new JSONObject(post.toString());duplicate.remove("id");duplicate.put("title",post.optString("title")+" — نسخة").put("plannedDate","");store.savePost(duplicate);render();}catch(Exception e){alert("تعذر إنشاء نسخة");}});LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,dp(44),1);cp.setMargins(dp(6),0,dp(6),0);copy.setLayoutParams(cp);button(box,"سجل فتح المشاركة",()->{StringBuilder log=new StringBuilder();for(JSONObject item:store.query("SELECT at FROM postShares WHERE postId=? ORDER BY at DESC LIMIT 50",String.valueOf(post.optLong("id"))))log.append(android.text.format.DateFormat.format("yyyy-MM-dd HH:mm",item.optLong("at"))).append("\n");alert(log.length()==0?"لم يُفتح للمشاركة بعد":log.toString());});
-        }if(adLimit>20)button(content,"الصفحة السابقة",()->{adLimit-=20;render();});if(posts.size()>20)button(content,"الصفحة التالية",()->{adLimit+=20;render();});
-    }
-    private void showPostImage(LinearLayout parent,String name){if(name.isEmpty())return;android.graphics.Bitmap bitmap=PostMedia.thumbnail(this,name);if(bitmap==null){muted(parent,"الصورة غير متاحة؛ أعد إضافتها");return;}ImageView image=new ImageView(this);image.setImageBitmap(bitmap);image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setContentDescription("صورة المنشور");LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(210));lp.setMargins(0,dp(12),0,dp(8));parent.addView(image,lp);}
-    private void capturePost(){if(postDraft==null)return;try{for(java.util.Map.Entry<String,EditText> entry:postInputs.entrySet())postDraft.put(entry.getKey(),entry.getValue().getText().toString());if(postCategory!=null)postDraft.put("category",POST_CATEGORIES[postCategory.getSelectedItemPosition()]);}catch(Exception ignored){}}
-    private void editPost(JSONObject original){
-        if(postDialog!=null&&postDialog.isShowing())postDialog.dismiss();try{postDraft=new JSONObject(original.toString());if(!postDraft.has("business"))postDraft.put("business",business);}catch(Exception e){alert("تعذر فتح المنشور");return;}postInputs.clear();LinearLayout f=form();f.addView(text(postDraft.optString("business").equals("survey")?"منشور أجهزة المساحة":"منشور البرامج والتطبيقات",22));muted(f,"يُحفظ في مكتبة هذا النشاط فقط");
-        button(f,"إدراج بيانات منشأة هذا النشاط في النص",()->{EditText text=postInputs.get("body");if(text==null)return;String footer=profileFooter(postDraft.optString("business"),true);if(footer.isEmpty()){alert("أضف بيانات المنشأة من الإعدادات أولًا");return;}if(!text.getText().toString().contains(footer))text.append("\n\n"+footer);});
-        postInputs.put("title",field(f,"عنوان داخلي للمنشور",postDraft.optString("title"),1));EditText body=field(f,"النص المصاحب للصورة",postDraft.optString("body"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);body.setMinLines(5);postInputs.put("body",body);
-        int category=0;for(int i=0;i<POST_CATEGORIES.length;i++)if(POST_CATEGORIES[i].equals(postDraft.optString("category")))category=i;postCategory=spinner(f,"نوع المحتوى",POST_CATEGORIES,category);showPostImage(f,postDraft.optString("image"));button(f,"اختيار صورة من الهاتف",()->{capturePost();postDialog.dismiss();startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),30);});if(!postDraft.optString("image").isEmpty())button(f,"إزالة الصورة من المنشور",()->{capturePost();try{String removed=postDraft.optString("image");postDraft.put("image","");store.removeUnusedImage(removed);editPost(postDraft);}catch(Exception ignored){}});muted(f,"صور JPG / PNG / WEBP / GIF حتى 3 ميغابايت. تُحفظ الصورة الأصلية دون تعديل.");
-        button(f,"تجهيز صورة بقالب جاهز",()->{capturePost();designPost();});
-        EditText date=field(f,"يوم النشر المخطط (اختياري)",postDraft.optString("plannedDate"),1);postInputs.put("plannedDate",date);button(f,"اختيار يوم النشر",()->{LocalDate today=LocalDate.now();new DatePickerDialog(this,(v,y,m,d)->date.setText(LocalDate.of(y,m+1,d).toString()),today.getYear(),today.getMonthValue()-1,today.getDayOfMonth()).show();});button(f,"إزالة يوم النشر",()->date.setText(""));muted(f,"هذا تنظيم للمحتوى فقط؛ لا توجد جدولة إرسال تلقائي إلى الجروبات.");
-        primary(button(f,"حفظ المنشور",()->{capturePost();try{store.savePost(postDraft);postDialog.dismiss();postDraft=null;postInputs.clear();tab="ads";render();}catch(Exception e){alert(e.getMessage()==null?"تعذر حفظ المنشور":e.getMessage());}}));if(postDraft.optLong("id")>0){long id=postDraft.optLong("id");button(f,"حذف المنشور",()->new AlertDialog.Builder(this).setMessage("حذف هذا المنشور وسجل فتح مشاركته؟").setNegativeButton("إلغاء",null).setPositiveButton("حذف",(d,w)->{store.removePost(id);postDialog.dismiss();postDraft=null;postInputs.clear();render();}).show());}
-        ScrollView scroll=new ScrollView(this);scroll.addView(f);postDialog=new AlertDialog.Builder(this).setTitle("محرر الدعاية").setView(scroll).setNegativeButton("إلغاء",(d,w)->{postDraft=null;postInputs.clear();}).create();postDialog.setCancelable(false);postDialog.show();postDialog.getWindow().setBackgroundDrawable(shape(Color.WHITE,20,0));postDialog.getWindow().setLayout(-1,-1);
-    }
-    private void sharePost(JSONObject post){try{String body=post.optString("body"),image=post.optString("image");Intent send=new Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT,body).putExtra(Intent.EXTRA_TITLE,post.optString("title"));if(image.isEmpty())send.setType("text/plain");else{if(!PostMedia.file(this,image).isFile())throw new java.io.IOException("الصورة غير موجودة");Uri uri=new Uri.Builder().scheme("content").authority(getPackageName()+".images").appendPath(image).build();send.setType(PostMedia.mime(image)).putExtra(Intent.EXTRA_STREAM,uri).setClipData(android.content.ClipData.newUri(getContentResolver(),"صورة المنشور",uri));send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);}startActivity(Intent.createChooser(send,"اختر واتساب ثم الجروب"));store.preparedPost(post.optLong("id"));}catch(Exception e){alert("تعذر فتح المشاركة: "+(e.getMessage()==null?"تحقق من توفر تطبيق للمشاركة":e.getMessage()));}}
-    private void adCopy(){
-        final String activity=business;LinearLayout f=form();muted(f,"قوالب نصية محلية مجانية؛ لا تولّد صورًا ولا تضيف خصمًا أو وعدًا من تلقاء نفسها.");EditText product=field(f,activity.equals("survey")?"الجهاز أو الخدمة":"البرنامج أو الميزة","",1),benefit=field(f,"الفائدة أو المعلومات التي تريد إبرازها","",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE),brand=field(f,"اسم النشاط (اختياري)",profileBrand(activity),1),contact=field(f,"بيانات المنشأة المصاحبة للنص — يمكنك تعديلها لهذا المنشور",profileFooter(activity,false),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        new AlertDialog.Builder(this).setTitle("ثلاث أفكار للنص").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("تجهيز الصيغ",(d,w)->{String item=product.getText().toString().trim(),info=benefit.getText().toString().trim();if(item.isEmpty()||info.isEmpty()){alert("أدخل المنتج أو الميزة والفائدة أولًا");return;}String company=brand.getText().toString().trim(),phone=contact.getText().toString().trim();String footer=(company.isEmpty()?"":"\n\n"+company)+"\nراسلنا لمعرفة التفاصيل"+(phone.isEmpty()?"":"\n"+phone);String[] titles={"تعريف مباشر","سؤال يجذب الاهتمام","منشور معلوماتي"};String[] copies={item+"\n\n"+info+footer,"هل تبحث عن "+item+"؟\n\n"+info+footer,"قبل اختيار "+item+"، تعرّف على ما يفيد احتياجك:\n\n"+info+footer};LinearLayout choices=form();final AlertDialog[] holder=new AlertDialog[1];for(int i=0;i<3;i++){final int index=i;LinearLayout box=card(choices);box.addView(text(titles[i],19));TextView preview=text(copies[i],15);preview.setTextIsSelectable(true);box.addView(preview);button(box,"استخدام هذه الصيغة",()->{try{holder[0].dismiss();editPost(new JSONObject().put("business",activity).put("title",item+" — "+titles[index]).put("body",copies[index]).put("category",index==2?"معلومة":"تعريف"));}catch(Exception e){alert("تعذر تجهيز المنشور");}});button(box,"نسخ النص",()->((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("نص الدعاية",copies[index])));}holder[0]=panel("اختر الصيغة وعدّلها",choices);}).show();
+    private void alert(String str) {
+        new FluentDialog(this).setMessage(str).setPositiveButton("حسنًا", (DialogInterface.OnClickListener) null).show();
     }
 
-    private void designPost(){if(postDraft==null)return;LinearLayout f=form();muted(f,"قالب محلي 1080×1350. الصورة الحالية تُوضع داخل القالب دون إزالة الخلفية. راجع المعاينة ثم احفظ المنشور.");EditText title=field(f,"عنوان الصورة",postDraft.optString("title"),1),summary=field(f,"نص قصير على الصورة (حتى 180 حرفًا)","",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);String activity=postDraft.optString("business");EditText brand=field(f,"اسم النشاط",profileBrand(activity),1),contact=field(f,"التواصل أو الدعوة للإجراء",profileContact(activity),1);Spinner theme=spinner(f,"ألوان التصميم",new String[]{"بنفسجي فاتح","أخضر فاتح","برتقالي فاتح"},activity.equals("survey")?2:0);
-        new AlertDialog.Builder(this).setTitle("تصميم صورة للمنشور").setView(f).setNegativeButton("إلغاء",null).setPositiveButton("إنشاء المعاينة",(d,w)->{String headline=title.getText().toString().trim(),detail=summary.getText().toString().trim(),identity=brand.getText().toString().trim(),call=contact.getText().toString().trim();if(headline.isEmpty()||headline.length()>80||detail.length()>180||identity.length()>60||call.length()>60){alert("اختصر العنوان إلى 80 حرفًا والنص إلى 180 واسم النشاط والتواصل إلى 60 حرفًا");return;}try{String image=PostDesigns.create(this,postDraft.optString("image"),headline,detail,identity,call,theme.getSelectedItemPosition());postDraft.put("image",image);editPost(postDraft);}catch(Exception e){alert(e.getMessage()==null?"تعذر إنشاء التصميم":e.getMessage());}}).show();
+    private boolean allowedDetail(String str, String str2) {
+        if (str.isEmpty()) {
+            return false;
+        }
+        return (str.equals("survey") ? "|device|model|service|condition|quantity|budget|purchaseDate|calibrationDate|" : "|program|platform|needs|plan|budget|demoDate|subscriptionEnd|").contains("|" + str2 + "|");
     }
 
-    private String profileBrand(String activity){JSONObject data=store.profile(activity);return data.optString("brand").isEmpty()?data.optString("name"):data.optString("brand");}
-    private String profileContact(String activity){JSONObject data=store.profile(activity);String phone=Profiles.firstPhone(data.optString("phones"));return phone.isEmpty()?data.optString("whatsapp"):phone;}
-    private String profileFooter(String activity,boolean includeName){JSONObject data=store.profile(activity);StringBuilder footer=new StringBuilder();if(includeName&&!profileBrand(activity).isEmpty())footer.append(profileBrand(activity));JSONObject choices=data.optJSONObject("advertising");for(String key:Profiles.AD_FIELDS){boolean usual=key.equals("address")||key.equals("phones")||key.equals("whatsapp")||key.equals("website");if(choices!=null?!choices.optBoolean(key,usual):!usual)continue;String value=data.optString(key).trim();if(value.isEmpty())continue;if(footer.length()>0)footer.append("\n");footer.append(Profiles.label(key)).append(": ").append(value);}return footer.toString();}
-    private static final String[] ORGANIZATION_ACTIVITIES={"خدمات","تجارة عامة","دعم فني","صيانة","تسويق","تسويق رقمي","بيع مباشر","بيع تجزئة","بيع جملة","خدمات لوجستية","نقل وتوصيل","مقاولات","أجهزة مساحة","تقنية وبرمجيات","استشارات","تدريب وتعليم","نشاط حرفي","تصنيع","عقارات","مطاعم وأغذية","صحة وتجميل","سيارات","سياحة وسفر","نشاط آخر — كتابة يدوية"};
-    private int organizationActivityIndex(String value){for(int i=0;i<ORGANIZATION_ACTIVITIES.length;i++)if(ORGANIZATION_ACTIVITIES[i].equals(value))return i;return ORGANIZATION_ACTIVITIES.length-1;}
-    private void editProfile(String activity){
-        final JSONObject data=store.profile(activity);LinearLayout f=form();f.addView(text("بيانات المنشأة",23));muted(f,"حدّد نشاط منشأتك من القائمة. هذا إعداد للمنشأة وليس قسمًا ثابتًا للتطبيق أو للعميل.");String savedActivity=data.optString("organizationActivityName");if(savedActivity.isEmpty())savedActivity=CustomerActivity.label(data.optString("organizationActivityType"));Spinner organizationActivity=spinner(f,"نشاط المنشأة",ORGANIZATION_ACTIVITIES,organizationActivityIndex(savedActivity));EditText customActivity=field(f,"نشاط آخر (اكتبه عند عدم وجوده في القائمة)",data.optString("organizationActivityCustom"),1);customActivity.setVisibility(organizationActivity.getSelectedItemPosition()==ORGANIZATION_ACTIVITIES.length-1?View.VISIBLE:View.GONE);organizationActivity.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int position,long id){customActivity.setVisibility(position==ORGANIZATION_ACTIVITIES.length-1?View.VISIBLE:View.GONE);}});java.util.Map<String,EditText> inputs=new java.util.LinkedHashMap<>();for(String[] pair:Profiles.FIELDS){int type=pair[0].equals("address")||pair[0].equals("nationalAddress")||pair[0].equals("phones")?android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE:pair[0].equals("email")?android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS:1;EditText field=field(f,pair[1],data.optString(pair[0]),type);inputs.put(pair[0],field);for(String link:Profiles.LINKS)if(link.equals(pair[0])){field.setTextDirection(View.TEXT_DIRECTION_LTR);field.setHint("https://...");}}
-        f.addView(text("ما يُدرج في نصوص الدعاية",20));muted(f,"اختر البيانات التي تريد إضافتها تلقائيًا. السجل التجاري والرقم الضريبي يُحفظان في الملف ولا يُدرجان في الدعاية.");JSONObject existing=data.optJSONObject("advertising");java.util.Map<String,CheckBox> flags=new java.util.LinkedHashMap<>();for(String key:Profiles.AD_FIELDS){boolean usual=key.equals("address")||key.equals("phones")||key.equals("whatsapp")||key.equals("website");CheckBox check=new CheckBox(this);check.setText(Profiles.label(key));check.setChecked(existing==null?usual:existing.optBoolean(key,usual));f.addView(check);flags.put(key,check);}
-        final AlertDialog[] holder=new AlertDialog[1];primary(button(f,"حفظ بيانات هذه المنشأة",()->{try{boolean other=organizationActivity.getSelectedItemPosition()==ORGANIZATION_ACTIVITIES.length-1;String selected=other?customActivity.getText().toString().trim():ORGANIZATION_ACTIVITIES[organizationActivity.getSelectedItemPosition()];if(selected.isEmpty())throw new IllegalArgumentException("اكتب نشاط المنشأة أولًا");data.put("organizationActivityType",other?"other":"").put("organizationActivityName",selected).put("organizationActivityCustom",other?selected:"");for(java.util.Map.Entry<String,EditText> entry:inputs.entrySet())data.put(entry.getKey(),entry.getValue().getText().toString().trim());JSONObject choices=new JSONObject();for(java.util.Map.Entry<String,CheckBox> entry:flags.entrySet())choices.put(entry.getKey(),entry.getValue().isChecked());data.put("advertising",choices);store.saveProfile(activity,data);holder[0].dismiss();render();alert("حُفظت بيانات المنشأة ونوع نشاطها");}catch(Exception e){alert(e.getMessage()==null?"تحقق من البيانات والروابط":e.getMessage());}}));
-        button(f,"نسخ بيانات المنشأة المحفوظة",()->{StringBuilder text=new StringBuilder();JSONObject saved=store.profile(activity);for(String[] pair:Profiles.FIELDS){String value=saved.optString(pair[0]);if(!value.isEmpty())text.append(pair[1]).append(": ").append(value).append("\n");}((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("بيانات المنشأة",text.toString()));});for(String key:Profiles.LINKS){String value=data.optString(key);if(!value.isEmpty())button(f,"فتح "+Profiles.label(key),()->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(Profiles.url(value))));}catch(Exception e){alert("تعذر فتح الرابط");}});}holder[0]=panel("بيانات المنشأة",f);
+    private void askRestorePassword(final String str, boolean z) {
+        AlertDialog.Builder negativeButton;
+        DialogInterface.OnClickListener onClickListener;
+        String str2;
+        if (z) {
+            LinearLayout linearLayoutForm = form();
+            final EditText editTextField = field(linearLayoutForm, "كلمة مرور النسخة", "", 129);
+            negativeButton = new FluentDialog(this).setTitle("فك تشفير النسخة").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null);
+            onClickListener = new DialogInterface.OnClickListener() {
+                @Override
+                public final void onClick(DialogInterface dialogInterface, int i) {
+                    MainActivity.this.lambda$askRestorePassword$99(str, editTextField, dialogInterface, i);
+                }
+            };
+            str2 = "استعادة";
+        } else {
+            negativeButton = new FluentDialog(this).setTitle("نسخة قديمة غير مشفرة").setMessage("هذا الملف غير مشفر وقد يحتوي بيانات حساسة بنص مقروء. هل تريد استيراده ثم إنشاء نسخة مشفرة جديدة؟").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null);
+            onClickListener = new DialogInterface.OnClickListener() {
+                @Override
+                public final void onClick(DialogInterface dialogInterface, int i) {
+                    MainActivity.this.lambda$askRestorePassword$98(str, dialogInterface, i);
+                }
+            };
+            str2 = "استيراد";
+        }
+        negativeButton.setPositiveButton(str2, onClickListener).show();
     }
 
-    
+    public void assignCalls() {
+        String str;
+        if (this.selectedCalls.isEmpty()) {
+            str = "حدد الأرقام التي تريد اعتمادها أولًا";
+        } else {
+            int iAssign = this.store.assign(new ArrayList(this.selectedCalls), "survey");
+            this.selectedCalls.clear();
+            render();
+            str = "تم اعتماد " + iAssign + " رقمًا كعملاء";
+        }
+        alert(str);
+    }
+
+    private byte[] backupBytes() throws Exception {
+        try (Store snapshot = new Store(getApplicationContext())) {
+            byte[] bytes = snapshot.backup().toString(2).getBytes(StandardCharsets.UTF_8);
+            if (bytes.length <= MAX_BACKUP_BYTES) {
+                return bytes;
+            }
+            throw new IllegalArgumentException("حجم النسخة يتجاوز 25 ميغابايت؛ احذف الرسائل أو الصور غير اللازمة ثم أعد المحاولة");
+        } catch (OutOfMemoryError unused) {
+            throw new IllegalArgumentException("النسخة أكبر من ذاكرة الهاتف؛ احذف الرسائل أو الصور غير اللازمة ثم أعد المحاولة");
+        }
+    }
+
+    private Button button(LinearLayout linearLayout, String str, final Runnable runnable) {
+        Button button = new Button(this);
+        button.setText(str);
+        UiTheme.button(button, false);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
+        layoutParams.setMargins(0, dp(5), 0, dp(5));
+        linearLayout.addView(button, layoutParams);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                MainActivity.lambda$button$0(runnable, view);
+            }
+        });
+        return button;
+    }
+
+    private void calculatorCard() {
+        LinearLayout linearLayoutRow = row();
+        linearLayoutRow.setGravity(16);
+        linearLayoutRow.setPadding(dp(18), dp(18), dp(18), dp(18));
+        linearLayoutRow.setBackground(gradient(-15717821, -15315357, 20));
+        linearLayoutRow.setElevation(dp(3));
+        linearLayoutRow.setMinimumHeight(dp(112));
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
+        layoutParams.setMargins(0, dp(16), 0, dp(10));
+        this.content.addView(linearLayoutRow, layoutParams);
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setGravity(16);
+        linearLayoutRow.addView(linearLayoutColumn, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        TextView textViewText = text("الحاسبة الذكية", 19);
+        textViewText.setTextColor(-1);
+        linearLayoutColumn.addView(textViewText, new LinearLayout.LayoutParams(-1, -2));
+        TextView textViewText2 = text("حساب سريع وضريبة القيمة المضافة 15%", 12);
+        textViewText2.setTextColor(-3343375);
+        textViewText2.setSingleLine(false);
+        textViewText2.setPadding(0, dp(3), 0, dp(3));
+        linearLayoutColumn.addView(textViewText2, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout linearLayoutColumn2 = column();
+        linearLayoutColumn2.setGravity(17);
+        linearLayoutColumn2.setBackground(shape(654311423, 16, 0));
+        linearLayoutColumn2.addView(new Glyph(this, "calculator", -1), new LinearLayout.LayoutParams(dp(30), dp(30)));
+        linearLayoutRow.addView(linearLayoutColumn2, new LinearLayout.LayoutParams(dp(54), dp(54)));
+        linearLayoutRow.setClickable(true);
+        linearLayoutRow.setForeground(new RippleDrawable(ColorStateList.valueOf(872415231), null, null));
+        linearLayoutRow.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                MainActivity.this.lambda$calculatorCard$27(view);
+            }
+        });
+        linearLayoutRow.setContentDescription("فتح الحاسبة الذكية");
+    }
+
+    private void callSetup() {
+        int i;
+        LinearLayout linearLayoutForm = form();
+        muted(linearLayoutForm, "يُنشأ العميل تلقائيًا من الرقم والاسم المتاح. لن تُطلب منك بقية البيانات. سيُحدّث السجل عند فتح التطبيق إذا سمح الهاتف بالوصول إليه.");
+        String[] strArr = {"اتركه غير محدد للمراجعة الجماعية", "أجهزة المساحة", "البرامج والتطبيقات"};
+        if (getSharedPreferences("settings", 0).getString("newBusiness", "").equals("survey")) {
+            i = 1;
+        } else {
+            i = getSharedPreferences("settings", 0).getString("newBusiness", "").equals("software") ? 2 : 0;
+        }
+        final Spinner spinner = spinner(linearLayoutForm, "النشاط الافتراضي للأرقام الجديدة", strArr, i);
+        spinner.setSelection("survey".equals("survey") ? 1 : 2);
+        spinner.setEnabled(false);
+        new FluentDialog(this).setTitle("إعداد المكالمات").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("تفعيل واستيراد", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i2) {
+                MainActivity.this.lambda$callSetup$87(spinner, dialogInterface, i2);
+            }
+        }).show();
+    }
+
+    private void capturePost() {
+        if (this.postDraft == null) {
+            return;
+        }
+        try {
+            for (Map.Entry<String, EditText> entry : this.postInputs.entrySet()) {
+                this.postDraft.put(entry.getKey(), entry.getValue().getText().toString());
+            }
+            Spinner spinner = this.postCategory;
+            if (spinner != null) {
+                this.postDraft.put("category", POST_CATEGORIES[spinner.getSelectedItemPosition()]);
+            }
+        } catch (Exception unused) {
+        }
+    }
+
+    private LinearLayout card(LinearLayout linearLayout) {
+        return UiTheme.card(linearLayout);
+    }
+
+    public void chooseBackupPassword() {
+        LinearLayout linearLayoutForm = form();
+        final EditText editTextField = field(linearLayoutForm, "كلمة المرور — 8 أحرف على الأقل", "", 129);
+        final EditText editTextField2 = field(linearLayoutForm, "تأكيد كلمة المرور", "", 129);
+        new FluentDialog(this).setTitle("حماية النسخة الاحتياطية").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("اختيار مكان الحفظ", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$chooseBackupPassword$88(editTextField, editTextField2, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public void chooseCallCsv() {
+        if (checkSelfPermission("android.permission.READ_CONTACTS") != 0) {
+            contactDisclosure(14, this::openCallCsv);
+        } else {
+            openCallCsv();
+        }
+    }
+
+    public void chooseCsvExport() {
+        new FluentDialog(this).setTitle("تصدير CSV").setMessage("يحتوي الملف أرقام العملاء وبياناتهم، وهو غير مشفر. اختر مكان حفظ آمنًا ولا تشاركه إلا عند الحاجة.").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("متابعة", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$chooseCsvExport$89(dialogInterface, i);
+            }
+        }).show();
+    }
+
+    private void chooseCsvKind() {
+        new FluentDialog(this).setTitle("اختر البيانات المراد تصديرها").setItems(new String[]{"العملاء", "عروض الأسعار", "بنود الدفاتر"}, new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$chooseCsvKind$90(dialogInterface, i);
+            }
+        }).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).show();
+    }
+
+    public void chooseLanguage() {
+        final boolean zEnglish = AppLanguage.english(this);
+        new FluentDialog(this).setTitle(tr("لغة التطبيق", "App language")).setSingleChoiceItems(new String[]{"العربية", "English"}, zEnglish ? 1 : 0, new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$chooseLanguage$76(zEnglish, dialogInterface, i);
+            }
+        }).setNegativeButton(tr("إلغاء", "Cancel"), (DialogInterface.OnClickListener) null).show();
+    }
+
+    private void chooseQuick(final JSONObject jSONObject, final Analysis analysis, final String str) {
+        int i = 0;
+        final ArrayList<JSONObject> arrayListQuery = this.store.query("SELECT * FROM leads ORDER BY name COLLATE NOCASE LIMIT 1000", new String[0]);
+        JSONObject jSONObject2 = analysis.phone.isEmpty() ? new JSONObject() : this.store.byPhone(analysis.phone);
+        if (jSONObject2.optLong("id") > 0) {
+            Iterator<JSONObject> it = arrayListQuery.iterator();
+            boolean z = false;
+            while (it.hasNext()) {
+                if (it.next().optLong("id") == jSONObject2.optLong("id")) {
+                    z = true;
+                }
+            }
+            if (!z) {
+                arrayListQuery.add(0, jSONObject2);
+            }
+        }
+        String[] strArr = new String[arrayListQuery.size() + 1];
+        strArr[0] = "إنشاء عميل من المعلومات المستخرجة";
+        int i2 = 0;
+        while (i < arrayListQuery.size()) {
+            int i3 = i + 1;
+            strArr[i3] = arrayListQuery.get(i).optString("name") + " • " + arrayListQuery.get(i).optString("phone", "");
+            if (arrayListQuery.get(i).optLong("id") == jSONObject2.optLong("id") && jSONObject2.optLong("id") > 0) {
+                i2 = i3;
+            }
+            i = i3;
+        }
+        LinearLayout linearLayoutForm = form();
+        if (i2 > 0) {
+            muted(linearLayoutForm, "وجدنا عميلًا بنفس الرقم؛ تم اقتراحه لتجنب التكرار.");
+        }
+        if (analysis.phones.size() > 1) {
+            muted(linearLayoutForm, "ورد أكثر من رقم في النص. راجع رقم العميل؛ لن نختار أحدها من محتوى الرسالة تلقائيًا.");
+        }
+        final Spinner spinner = spinner(linearLayoutForm, "العميل", strArr, i2);
+        new FluentDialog(this).setTitle("ربط المعلومات بالعميل").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("مراجعة وحفظ سريع", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i4) {
+                MainActivity.this.lambda$chooseQuick$57(jSONObject, spinner, arrayListQuery, analysis, str, dialogInterface, i4);
+            }
+        }).show();
+    }
+
+    private void clients() {
+        String string;
+        String str;
+        int i = 0;
+        JSONObject jSONObject = ((!this.business.equals("survey") || this.tab.equals("unassigned") || this.requestFilter <= 0) ? this.store.query("SELECT COUNT(*) AS total, SUM(CASE WHEN stage<4 THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage=4 THEN 1 ELSE 0 END) AS won FROM leads WHERE business=?", this.business) : this.store.query("SELECT COUNT(*) AS total, SUM(CASE WHEN stage<4 THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage=4 THEN 1 ELSE 0 END) AS won FROM leads WHERE business=? AND requestType=?", this.business, SurveyRequests.KEYS[this.requestFilter - 1])).get(0);
+        UiTheme.header(this.content, tr(this.tab.equals("today") ? "المتابعات" : this.tab.equals("unassigned") ? "الوارد للمراجعة" : "العملاء", this.tab.equals("today") ? "Follow-ups" : this.tab.equals("unassigned") ? "Review inbox" : "Customers"), this.tab.equals("today") ? "today" : this.tab.equals("unassigned") ? "unassigned" : "clients");
+        muted(this.content, this.tab.equals("today") ? "المواعيد المستحقة والمتأخرة في مكان واحد" : this.tab.equals("unassigned") ? "هذه أرقام من سجل المكالمات وليست عملاء حتى تعتمدها بنفسك" : "ملفات العملاء المعتمدة وفرص المتابعة الحالية");
+        if (!this.tab.equals("unassigned")) {
+            LinearLayout linearLayoutRow = row();
+            LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
+            layoutParams.setMargins(0, dp(14), 0, dp(12));
+            this.content.addView(linearLayoutRow, layoutParams);
+            metric(linearLayoutRow, "إجمالي العملاء", jSONObject.optInt("total"), -15434365);
+            metric(linearLayoutRow, this.business.equals("survey") ? "طلبات نشطة" : "فرص نشطة", jSONObject.optInt("active"), -2714312);
+            metric(linearLayoutRow, "مكتملون", jSONObject.optInt("won"), -13333386);
+        }
+        if (this.business.equals("software")) {
+            button(this.content, "اشتراكات ومشاريع ودعم البرامج", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$clients$13();
+                }
+            });
+        }
+        if (this.business.equals("survey") && this.tab.equals("clients")) {
+            button(this.content, "عروض أسعار المساحة • إنشاء PDF", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$clients$14();
+                }
+            });
+        }
+        if (!this.tab.equals("unassigned")) {
+            primary(button(this.content, "إضافة عميل", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$clients$15();
+                }
+            }));
+        }
+        if (this.tab.equals("today") && (!Reminders.enabled(this) || !Reminders.allowed(this))) {
+            primary(button(this.content, "تفعيل إشعارات المتابعة", this::enableNotifications));
+        }
+        if (this.business.equals("survey") && !this.tab.equals("unassigned")) {
+            spinner(this.content, "نوع الطلب", new String[]{"جميع الطلبات", "المبيعات", "الدعم الفني", "الصيانة", "المعايرة"}, this.requestFilter).setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> adapterView, View view, int i2, long j) {
+                    if (i2 != MainActivity.this.requestFilter) {
+                        MainActivity.this.requestFilter = i2;
+                        MainActivity.this.limit = 100;
+                        MainActivity.this.render();
+                    }
+                }
+
+                @Override
+                public void onNothingSelected(AdapterView<?> adapterView) {
+                }
+            });
+        }
+        if (this.tab.equals("unassigned")) {
+            LinearLayout linearLayoutCard = card(this.content);
+            linearLayoutCard.addView(text("راجع قبل الاعتماد", 19));
+            muted(linearLayoutCard, "الاستيراد لا ينشئ عملاء تلقائيًا. اختر فقط الأرقام التي تتأكد أنها عملاء ثم اعتمدها.");
+            primary(button(linearLayoutCard, "استيراد ملف سجل المكالمات CSV", this::chooseCallCsv));
+            LinearLayout linearLayoutRow2 = row();
+            linearLayoutCard.addView(linearLayoutRow2);
+            button(linearLayoutRow2, "اعتماد المحدد", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.assignCalls();
+                }
+            }).setLayoutParams(new LinearLayout.LayoutParams(0, dp(44), 1.0f));
+            Button button = button(linearLayoutRow2, "حذف غير المعتمد", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$clients$17();
+                }
+            });
+            LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(0, dp(44), 1.0f);
+            layoutParams2.setMargins(dp(6), 0, 0, 0);
+            button.setLayoutParams(layoutParams2);
+        }
+        if (this.tab.equals("clients")) {
+            customerFilters();
+            LinearLayout linearLayoutRow3 = row();
+            LinearLayout.LayoutParams layoutParams3 = new LinearLayout.LayoutParams(-1, -2);
+            layoutParams3.setMargins(0, dp(10), 0, dp(10));
+            this.content.addView(linearLayoutRow3, layoutParams3);
+            final EditText editText = new EditText(this);
+            editText.setTextSize(14.0f);
+            editText.setTypeface(this.cairo);
+            editText.setSingleLine(true);
+            editText.setHint("ابحث بالاسم أو الرقم أو الشركة");
+            editText.setHintTextColor(-10192758);
+            editText.setPadding(dp(14), 0, dp(14), 0);
+            editText.setBackground(shape(-1, 14, -2299923));
+            editText.setText(this.search);
+            linearLayoutRow3.addView(editText, new LinearLayout.LayoutParams(0, dp(48), 1.0f));
+            final Button button2 = button(linearLayoutRow3, "بحث", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$clients$18(editText);
+                }
+            });
+            LinearLayout.LayoutParams layoutParams4 = new LinearLayout.LayoutParams(dp(64), dp(48));
+            layoutParams4.setMargins(0, 0, dp(8), 0);
+            button2.setLayoutParams(layoutParams4);
+            editText.setImeOptions(3);
+            editText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+                @Override
+                public final boolean onEditorAction(TextView textView, int i2, KeyEvent keyEvent) {
+                    return MainActivity.lambda$clients$19(button2, textView, i2, keyEvent);
+                }
+            });
+        }
+        ArrayList arrayList = new ArrayList();
+        arrayList.add(this.business);
+        if (this.tab.equals("clients")) {
+            muted(this.content, "مرتبة حسب آخر تواصل؛ استخدم البحث للوصول السريع إلى ملف العميل.");
+        }
+        if (this.tab.equals("today")) {
+            followUpDates();
+            if (this.followDate.isEmpty()) {
+                arrayList.add(LocalDate.now().toString());
+                string = "business=? AND stage<4 AND (followUp='' OR followUp<=?)";
+            } else {
+                arrayList.add(this.followDate);
+                string = "business=? AND stage<4 AND followUp=?";
+            }
+            str = "CASE WHEN followUp='' THEN 1 ELSE 0 END, followUp ASC, followTime ASC, name COLLATE NOCASE";
+        } else {
+            string = "business=?";
+            str = "CASE WHEN lastCallAt=0 THEN 1 ELSE 0 END, lastCallAt DESC, name COLLATE NOCASE";
+        }
+        if (this.tab.equals("clients") && this.customerStageFilter > 0) {
+            StringBuilder sbAppend = new StringBuilder().append(string);
+            int i2 = this.customerStageFilter;
+            string = sbAppend.append(i2 == 1 ? " AND stage<4" : i2 == 2 ? " AND stage=4" : " AND stage=5").toString();
+        }
+        if (this.tab.equals("unassigned")) {
+            arrayList.clear();
+            string = "business=''";
+            str = "lastCallAt DESC";
+        }
+        if (this.business.equals("survey") && !this.tab.equals("unassigned") && this.requestFilter > 0) {
+            string = string + " AND requestType=?";
+            arrayList.add(SurveyRequests.KEYS[this.requestFilter - 1]);
+        }
+        if (!this.search.isEmpty() && this.tab.equals("clients")) {
+            string = string + " AND (name LIKE ? OR phone LIKE ? OR company LIKE ?)";
+            for (int i3 = 0; i3 < 3; i3++) {
+                arrayList.add("%" + this.search + "%");
+            }
+        }
+        final ArrayList<JSONObject> arrayListQuery = this.store.query("SELECT * FROM leads WHERE " + string + " ORDER BY " + str + " LIMIT " + (this.limit + 1), (String[]) arrayList.toArray(new String[0]));
+        if (arrayListQuery.isEmpty()) {
+            empty(this.tab.equals("today") ? "متابعاتك تحت السيطرة" : "ابدأ بأول عميل", this.tab.equals("today") ? "لا توجد متابعات مستحقة في هذا النشاط اليوم" : "أضف عميلًا أو استورد أرقام المكالمات من الإعدادات");
+        }
+        if (this.tab.equals("unassigned") && !arrayListQuery.isEmpty()) {
+            button(this.content, "تحديد المعروض بالكامل", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$clients$20(arrayListQuery);
+                }
+            });
+        }
+        for (JSONObject jSONObject2 : arrayListQuery) {
+            int i4 = i + 1;
+            if (i >= this.limit) {
+                break;
+            }
+            leadCard(jSONObject2);
+            i = i4;
+        }
+        if (arrayListQuery.size() > this.limit) {
+            button(this.content, "عرض المزيد", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$clients$21();
+                }
+            });
+        }
+    }
+
+    private LinearLayout column() {
+        LinearLayout linearLayout = new LinearLayout(this);
+        linearLayout.setOrientation(1);
+        return linearLayout;
+    }
+
+    private void contactDisclosure(final int i, final Runnable runnable) {
+        new FluentDialog(this).setTitle("استخدام جهات الاتصال").setMessage("سيقرأ تواصل أسماء وأرقام جهات الاتصال من هاتفك لمطابقة أرقام العملاء بالأسماء محليًا. لا تُرسل جهات الاتصال إلى المطور أو إلى خادم، ويمكنك متابعة استخدام التطبيق دون هذا الإذن.").setNegativeButton(runnable == null ? "ليس الآن" : "المتابعة دون أسماء", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i2) {
+                MainActivity.lambda$contactDisclosure$77(runnable, dialogInterface, i2);
+            }
+        }).setPositiveButton("متابعة", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i2) {
+                MainActivity.this.lambda$contactDisclosure$78(i, dialogInterface, i2);
+            }
+        }).show();
+    }
+
+    private void customerFilters() {
+        LinearLayout linearLayoutRow = row();
+        this.content.addView(linearLayoutRow);
+        String[] strArr = {tr("الكل", "All"), tr("نشط", "Active"), tr("مكتمل", "Done"), tr("مغلق", "Closed")};
+        for (int index = 0; index < 4; index++) {
+            final int i = index;
+            Button button = button(linearLayoutRow, strArr[i], new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$customerFilters$22(i);
+                }
+            });
+            UiTheme.button(button, i == this.customerStageFilter);
+            button.setTextSize(12.0f);
+            button.setPadding(dp(5), dp(8), dp(5), dp(8));
+            LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
+            layoutParams.setMargins(dp(2), dp(4), dp(2), dp(4));
+            button.setLayoutParams(layoutParams);
+        }
+    }
+
+    private void designPost() {
+        if (this.postDraft == null) {
+            return;
+        }
+        LinearLayout linearLayoutForm = form();
+        muted(linearLayoutForm, "قالب محلي 1080×1350. الصورة الحالية تُوضع داخل القالب دون إزالة الخلفية. راجع المعاينة ثم احفظ المنشور.");
+        final EditText editTextField = field(linearLayoutForm, "عنوان الصورة", this.postDraft.optString("title"), 1);
+        final EditText editTextField2 = field(linearLayoutForm, "نص قصير على الصورة (حتى 180 حرفًا)", "", 131073);
+        String strOptString = this.postDraft.optString("business");
+        final EditText editTextField3 = field(linearLayoutForm, "اسم النشاط", profileBrand(strOptString), 1);
+        final EditText editTextField4 = field(linearLayoutForm, "التواصل أو الدعوة للإجراء", profileContact(strOptString), 1);
+        final Spinner spinner = spinner(linearLayoutForm, "ألوان التصميم", new String[]{"بنفسجي فاتح", "أخضر فاتح", "برتقالي فاتح"}, strOptString.equals("survey") ? 2 : 0);
+        new FluentDialog(this).setTitle("تصميم صورة للمنشور").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("إنشاء المعاينة", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$designPost$133(editTextField, editTextField2, editTextField3, editTextField4, spinner, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    private int dp(int i) {
+        return (int) (i * getResources().getDisplayMetrics().density);
+    }
+
+    private void edit(JSONObject jSONObject, final long j) {
+        String str;
+        try {
+            final JSONObject jSONObject2 = new JSONObject(jSONObject.toString());
+            if (!jSONObject2.has("id") && !jSONObject2.has("business")) {
+                jSONObject2.put("business", "survey");
+            }
+            LinearLayout linearLayoutColumn = column();
+            linearLayoutColumn.setLayoutDirection(AppLanguage.direction(this));
+            linearLayoutColumn.setPadding(dp(18), dp(8), dp(18), dp(8));
+            ScrollView scrollView = new ScrollView(this);
+            scrollView.addView(linearLayoutColumn);
+            if (j > 0) {
+                linearLayoutColumn.addView(text("اقتراحات من النص — راجع الاسم والرقم والنشاط والموعد قبل الحفظ. التحليل محلي بالكلمات والصيغ، وقد لا يفهم السياق.", 16));
+            }
+            UiTheme.header(linearLayoutColumn, tr("ملف العميل", "Customer profile"), "clients");
+            final EditText editTextField = field(linearLayoutColumn, "اسم العميل *", jSONObject2.optString("name"), 1);
+            final EditText editTextField2 = field(linearLayoutColumn, "الرقم السعودي", jSONObject2.optString("phone"), 3);
+            editTextField2.setTextDirection(3);
+            final Spinner spinner = new Spinner(this);
+            spinner.setAdapter((SpinnerAdapter) new ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"", "survey", "software"}));
+            spinner.setSelection("survey".equals("survey") ? 1 : 2);
+            spinner.setVisibility(8);
+            linearLayoutColumn.addView(spinner, new LinearLayout.LayoutParams(1, 1));
+            muted(linearLayoutColumn, "نوع الطلب التالي خاص بالمساحة. عند تغيير النوع تبدأ المرحلة من جديد؛ اختر المرحلة المناسبة قبل الحفظ.");
+            final Spinner spinner2 = spinner(linearLayoutColumn, "نوع الطلب الحالي — نشاط المساحة", SurveyRequests.LABELS, SurveyRequests.index(jSONObject2.optString("requestType", "sales")));
+            final Spinner spinner3 = spinner(linearLayoutColumn, "المرحلة", stages(jSONObject2.optString("business"), jSONObject2.optString("requestType", "sales")), jSONObject2.optInt("stage"));
+            final String[] strArr = {jSONObject2.optString("business") + ":" + jSONObject2.optString("requestType", "sales")};
+            final Runnable runnable = new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$edit$41(spinner, spinner2, strArr, spinner3);
+                }
+            };
+            AdapterView.OnItemSelectedListener onItemSelectedListener = new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> adapterView, View view, int i, long j2) {
+                    runnable.run();
+                }
+
+                @Override
+                public void onNothingSelected(AdapterView<?> adapterView) {
+                }
+            };
+            spinner.setOnItemSelectedListener(onItemSelectedListener);
+            spinner2.setOnItemSelectedListener(onItemSelectedListener);
+            final EditText editTextField3 = field(linearLayoutColumn, "الشركة", jSONObject2.optString("company"), 1);
+            final EditText editTextField4 = field(linearLayoutColumn, "البريد الإلكتروني للعميل", jSONObject2.optString("email"), 33);
+            final EditText editTextField5 = field(linearLayoutColumn, "الجهاز / البرنامج / الخدمة المطلوبة", jSONObject2.optString("interest"), 1);
+            final EditText editTextField6 = field(linearLayoutColumn, "موعد المتابعة — اضغط لفتح التقويم", jSONObject2.optString("followUp"), 1);
+            editTextField6.setTextDirection(3);
+            editTextField6.setFocusable(false);
+            editTextField6.setClickable(true);
+            editTextField6.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public final void onClick(View view) {
+                    MainActivity.this.lambda$edit$42(editTextField6, view);
+                }
+            });
+            final EditText editTextField7 = field(linearLayoutColumn, "وقت التنبيه (HH:mm)", jSONObject2.optString("followTime", "09:00"), 1);
+            editTextField7.setTextDirection(3);
+            button(linearLayoutColumn, "اختيار الوقت", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$edit$44(editTextField7);
+                }
+            });
+            button(linearLayoutColumn, "اختيار موعد من التقويم", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$edit$45(editTextField6);
+                }
+            });
+            button(linearLayoutColumn, "إزالة الموعد", new Runnable() {
+                @Override
+                public final void run() {
+                    editTextField6.setText("");
+                }
+            });
+            final EditText editTextField8 = field(linearLayoutColumn, "ملاحظات", jSONObject2.optString("notes"), 131073);
+            editTextField8.setMinLines(3);
+            final CheckBox checkBox = new CheckBox(this);
+            checkBox.setTypeface(this.cairo);
+            checkBox.setText("فتح جهات اتصال الهاتف لحفظ العميل بعد حفظ بياناته");
+            linearLayoutColumn.addView(checkBox);
+            FluentDialog fluentDialog = new FluentDialog(this);
+            if (j > 0) {
+                str = "مراجعة وحفظ معلومات الرسالة";
+            } else {
+                str = jSONObject2.optLong("id") > 0 ? "تعديل العميل" : "عميل جديد";
+            }
+            final AlertDialog alertDialogCreate = fluentDialog.setTitle(str).setView(scrollView).setPositiveButton("حفظ", (DialogInterface.OnClickListener) null).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).create();
+            if (jSONObject2.optLong("id") > 0) {
+                tools(linearLayoutColumn, jSONObject2, alertDialogCreate);
+            }
+            if (jSONObject2.optLong("id") > 0) {
+                button(linearLayoutColumn, "حذف العميل", new Runnable() {
+                    @Override
+                    public final void run() {
+                        MainActivity.this.lambda$edit$48(jSONObject2, alertDialogCreate);
+                    }
+                });
+            }
+            alertDialogCreate.setOnShowListener(new DialogInterface.OnShowListener() {
+                @Override
+                public final void onShow(DialogInterface dialogInterface) {
+                    MainActivity.this.lambda$edit$50(alertDialogCreate, jSONObject2, editTextField, editTextField2, spinner, spinner3, spinner2, editTextField3, editTextField4, editTextField5, editTextField6, editTextField8, editTextField7, j, checkBox, dialogInterface);
+                }
+            });
+            alertDialogCreate.show();
+            alertDialogCreate.getWindow().setBackgroundDrawable(shape(-1, 24, 0));
+            alertDialogCreate.getWindow().setLayout(-1, -1);
+            alertDialogCreate.getButton(-1).setTextColor(-15434365);
+            alertDialogCreate.getButton(-2).setTextColor(-10192758);
+        } catch (Exception unused) {
+            alert("تعذر فتح بيانات العميل");
+        }
+    }
+
+    public void lambda$advertising$114(JSONObject jSONObject) {
+        String[] strArr;
+        AlertDialog alertDialog = this.postDialog;
+        if (alertDialog != null && alertDialog.isShowing()) {
+            this.postDialog.dismiss();
+        }
+        try {
+            JSONObject jSONObject2 = new JSONObject(jSONObject.toString());
+            this.postDraft = jSONObject2;
+            if (!jSONObject2.has("business")) {
+                this.postDraft.put("business", this.business);
+            }
+            this.postInputs.clear();
+            LinearLayout linearLayoutForm = form();
+            linearLayoutForm.addView(text(this.postDraft.optString("business").equals("survey") ? "منشور أجهزة المساحة" : "منشور البرامج والتطبيقات", 22));
+            muted(linearLayoutForm, "يُحفظ في مكتبة هذا النشاط فقط");
+            button(linearLayoutForm, "إدراج بيانات منشأة هذا النشاط في النص", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$editPost$119();
+                }
+            });
+            this.postInputs.put("title", field(linearLayoutForm, "عنوان داخلي للمنشور", this.postDraft.optString("title"), 1));
+            EditText editTextField = field(linearLayoutForm, "النص المصاحب للصورة", this.postDraft.optString("body"), 131073);
+            editTextField.setMinLines(5);
+            this.postInputs.put("body", editTextField);
+            int i = 0;
+            int i2 = 0;
+            while (true) {
+                strArr = POST_CATEGORIES;
+                if (i >= strArr.length) {
+                    break;
+                }
+                if (strArr[i].equals(this.postDraft.optString("category"))) {
+                    i2 = i;
+                }
+                i++;
+            }
+            this.postCategory = spinner(linearLayoutForm, "نوع المحتوى", strArr, i2);
+            showPostImage(linearLayoutForm, this.postDraft.optString("image"));
+            button(linearLayoutForm, "اختيار صورة من الهاتف", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$editPost$120();
+                }
+            });
+            if (!this.postDraft.optString("image").isEmpty()) {
+                button(linearLayoutForm, "إزالة الصورة من المنشور", new Runnable() {
+                    @Override
+                    public final void run() {
+                        MainActivity.this.lambda$editPost$121();
+                    }
+                });
+            }
+            muted(linearLayoutForm, "صور JPG / PNG / WEBP / GIF حتى 3 ميغابايت. تُحفظ الصورة الأصلية دون تعديل.");
+            button(linearLayoutForm, "تجهيز صورة بقالب جاهز", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$editPost$122();
+                }
+            });
+            final EditText editTextField2 = field(linearLayoutForm, "يوم النشر المخطط (اختياري)", this.postDraft.optString("plannedDate"), 1);
+            this.postInputs.put("plannedDate", editTextField2);
+            button(linearLayoutForm, "اختيار يوم النشر", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$editPost$124(editTextField2);
+                }
+            });
+            button(linearLayoutForm, "إزالة يوم النشر", new Runnable() {
+                @Override
+                public final void run() {
+                    editTextField2.setText("");
+                }
+            });
+            muted(linearLayoutForm, "هذا تنظيم للمحتوى فقط؛ لا توجد جدولة إرسال تلقائي إلى الجروبات.");
+            primary(button(linearLayoutForm, "حفظ المنشور", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$editPost$126();
+                }
+            }));
+            if (this.postDraft.optLong("id") > 0) {
+                final long jOptLong = this.postDraft.optLong("id");
+                button(linearLayoutForm, "حذف المنشور", new Runnable() {
+                    @Override
+                    public final void run() {
+                        MainActivity.this.lambda$editPost$128(jOptLong);
+                    }
+                });
+            }
+            ScrollView scrollView = new ScrollView(this);
+            scrollView.addView(linearLayoutForm);
+            AlertDialog alertDialogCreate = new FluentDialog(this).setTitle("محرر الدعاية").setView(scrollView).setNegativeButton("إلغاء", new DialogInterface.OnClickListener() {
+                @Override
+                public final void onClick(DialogInterface dialogInterface, int i3) {
+                    MainActivity.this.lambda$editPost$129(dialogInterface, i3);
+                }
+            }).create();
+            this.postDialog = alertDialogCreate;
+            alertDialogCreate.setCancelable(false);
+            this.postDialog.show();
+            this.postDialog.getWindow().setBackgroundDrawable(shape(-1, 20, 0));
+            this.postDialog.getWindow().setLayout(-1, -1);
+        } catch (Exception unused) {
+            alert("تعذر فتح المنشور");
+        }
+    }
+
+    private void editProfile(final String str) {
+        MainActivity mainActivity = this;
+        final JSONObject jSONObjectProfile = mainActivity.store.profile(str);
+        LinearLayout linearLayoutForm = mainActivity.form();
+        linearLayoutForm.addView(mainActivity.text("بيانات المنشأة", 23));
+        mainActivity.muted(linearLayoutForm, "حدّد نشاط منشأتك من القائمة. هذا إعداد للمنشأة وليس قسمًا ثابتًا للتطبيق أو للعميل.");
+        String strOptString = jSONObjectProfile.optString("organizationActivityName");
+        if (strOptString.isEmpty()) {
+            strOptString = CustomerActivity.label(jSONObjectProfile.optString("organizationActivityType"));
+        }
+        String[] strArr = ORGANIZATION_ACTIVITIES;
+        Spinner spinner = mainActivity.spinner(linearLayoutForm, "نشاط المنشأة", strArr, mainActivity.organizationActivityIndex(strOptString));
+        int i = 1;
+        final EditText editTextField = mainActivity.field(linearLayoutForm, "نشاط آخر (اكتبه عند عدم وجوده في القائمة)", jSONObjectProfile.optString("organizationActivityCustom"), 1);
+        editTextField.setVisibility(spinner.getSelectedItemPosition() == strArr.length - 1 ? 0 : 8);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i2, long j) {
+                editTextField.setVisibility(i2 == MainActivity.ORGANIZATION_ACTIVITIES.length + (-1) ? 0 : 8);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+            }
+        });
+        final LinkedHashMap linkedHashMap = new LinkedHashMap();
+        String[][] strArr2 = Profiles.FIELDS;
+        int length = strArr2.length;
+        int i2 = 0;
+        while (i2 < length) {
+            String[] strArr3 = strArr2[i2];
+            EditText editTextField2 = mainActivity.field(linearLayoutForm, strArr3[i], jSONObjectProfile.optString(strArr3[0]), (strArr3[0].equals("address") || strArr3[0].equals("nationalAddress") || strArr3[0].equals("phones")) ? 131073 : strArr3[0].equals("email") ? 33 : i);
+            linkedHashMap.put(strArr3[0], editTextField2);
+            for (String link : Profiles.LINKS) {
+                if (link.equals(strArr3[0])) {
+                    editTextField2.setTextDirection(3);
+                    editTextField2.setHint("https://...");
+                }
+            }
+            i2++;
+            i = 1;
+        }
+        final Spinner spinner3 = spinner;
+        linearLayoutForm.addView(mainActivity.text("ما يُدرج في نصوص الدعاية", 20));
+        mainActivity.muted(linearLayoutForm, "اختر البيانات التي تريد إضافتها تلقائيًا. السجل التجاري والرقم الضريبي يُحفظان في الملف ولا يُدرجان في الدعاية.");
+        JSONObject jSONObjectOptJSONObject = jSONObjectProfile.optJSONObject("advertising");
+        final LinkedHashMap linkedHashMap2 = new LinkedHashMap();
+        String[] strArr6 = Profiles.AD_FIELDS;
+        int length3 = strArr6.length;
+        int i4 = 0;
+        while (i4 < length3) {
+            String str2 = strArr6[i4];
+            boolean zOptBoolean = str2.equals("address") || str2.equals("phones") || str2.equals("whatsapp") || str2.equals("website");
+            String[] strArr7 = strArr6;
+            CheckBox checkBox = new CheckBox(mainActivity);
+            checkBox.setText(Profiles.label(str2));
+            if (jSONObjectOptJSONObject != null) {
+                zOptBoolean = jSONObjectOptJSONObject.optBoolean(str2, zOptBoolean);
+            }
+            checkBox.setChecked(zOptBoolean);
+            linearLayoutForm.addView(checkBox);
+            linkedHashMap2.put(str2, checkBox);
+            i4++;
+            mainActivity = this;
+            strArr6 = strArr7;
+        }
+        final AlertDialog[] alertDialogArr = new AlertDialog[1];
+        primary(button(linearLayoutForm, "حفظ بيانات هذه المنشأة", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$editProfile$134(spinner3, editTextField, jSONObjectProfile, linkedHashMap, linkedHashMap2, str, alertDialogArr);
+            }
+        }));
+        button(linearLayoutForm, "نسخ بيانات المنشأة المحفوظة", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$editProfile$135(str);
+            }
+        });
+        for (String str3 : Profiles.LINKS) {
+            final String strOptString2 = jSONObjectProfile.optString(str3);
+            if (!strOptString2.isEmpty()) {
+                button(linearLayoutForm, "فتح " + Profiles.label(str3), new Runnable() {
+                    @Override
+                    public final void run() {
+                        MainActivity.this.lambda$editProfile$136(strOptString2);
+                    }
+                });
+            }
+        }
+        alertDialogArr[0] = panel("بيانات المنشأة", linearLayoutForm);
+    }
+
+    private void editTemplates() {
+        LinearLayout linearLayoutForm = form();
+        final EditText editTextField = field(linearLayoutForm, "اسم القالب", "", 1);
+        final EditText editTextField2 = field(linearLayoutForm, "نص القالب — استخدم {الاسم} و{الشركة} و{رقم_العرض} و{المبلغ}", "", 131073);
+        editTextField2.setMinLines(6);
+        new FluentDialog(this).setTitle("إضافة قالب واتساب مخصص").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("حفظ", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$editTemplates$110(editTextField, editTextField2, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    private void empty(String str, String str2) {
+        LinearLayout linearLayoutCard = card(this.content);
+        linearLayoutCard.setGravity(17);
+        linearLayoutCard.setPadding(dp(24), dp(35), dp(24), dp(35));
+        linearLayoutCard.addView(new Glyph(this, "clients", -15434365), new LinearLayout.LayoutParams(dp(42), dp(42)));
+        TextView textViewText = text(str, 19);
+        textViewText.setGravity(17);
+        linearLayoutCard.addView(textViewText);
+        TextView textViewText2 = text(str2, 14);
+        textViewText2.setTextColor(-10192758);
+        textViewText2.setGravity(17);
+        linearLayoutCard.addView(textViewText2);
+    }
+
+    public void enableNotifications() {
+        getSharedPreferences("settings", 0).edit().putBoolean("reminders", true).apply();
+        Reminders.channel(this);
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != 0) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 13);
+        } else {
+            if (!Reminders.allowed(this)) {
+                startActivity(Reminders.settings(this));
+                return;
+            }
+            Reminders.deliver(this);
+            Reminders.schedule(this);
+            render();
+        }
+    }
+
+    private EditText field(LinearLayout linearLayout, String str, String str2, int i) {
+        muted(linearLayout, str);
+        EditText editText = new EditText(this);
+        editText.setTextSize(15.0f);
+        editText.setTypeface(this.cairo);
+        editText.setTextColor(-15189940);
+        editText.setInputType(i);
+        if (str2.equals("null")) {
+            str2 = "";
+        }
+        editText.setText(str2);
+        editText.setPadding(dp(14), dp(10), dp(14), dp(10));
+        editText.setBackground(shape(-788486, 12, -2299923));
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
+        layoutParams.setMargins(0, 0, 0, dp(14));
+        editText.setMinHeight(dp(50));
+        linearLayout.addView(editText, layoutParams);
+        UiTheme.input(editText);
+        return editText;
+    }
+
+    private void followAction(final long j, final boolean z) {
+        new FluentDialog(this).setMessage(z ? "تأجيل موعد المتابعة المحفوظ إلى الغد بنفس الوقت؟" : "تسجيل إتمام المتابعة وإزالة الموعد الحالي؟").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("تأكيد", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$followAction$104(j, z, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    private void followUpDates() {
+        LinearLayout linearLayoutRow = row();
+        this.content.addView(linearLayoutRow);
+        LocalDate localDateNow = this.followDate.isEmpty() ? LocalDate.now() : LocalDate.parse(this.followDate);
+        for (int i = 0; i < 5; i++) {
+            final LocalDate localDatePlusDays = localDateNow.plusDays(i);
+            Button button = button(linearLayoutRow, localDatePlusDays.format(DateTimeFormatter.ofPattern("EEE", AppLanguage.english(this) ? Locale.US : Locale.forLanguageTag("ar-u-nu-latn"))) + "\n" + localDatePlusDays.getDayOfMonth(), new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$followUpDates$23(localDatePlusDays);
+                }
+            });
+            UiTheme.button(button, localDatePlusDays.toString().equals(this.followDate));
+            button.setTextSize(12.0f);
+            LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
+            layoutParams.setMargins(dp(2), 0, dp(2), 0);
+            button.setLayoutParams(layoutParams);
+        }
+        muted(this.content, this.followDate.isEmpty() ? tr("المستحق والمتأخر والعملاء دون موعد", "Due, overdue and unscheduled customers") : this.followDate);
+        button(this.content, tr("اختيار تاريخ من التقويم", "Choose date from calendar"), new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$followUpDates$25();
+            }
+        });
+        if (this.followDate.isEmpty()) {
+            return;
+        }
+        button(this.content, tr("عرض المستحق والمتأخر", "Show due and overdue"), new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$followUpDates$26();
+            }
+        });
+    }
+
+    private LinearLayout form() {
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setLayoutDirection(AppLanguage.direction(this));
+        linearLayoutColumn.setBackgroundColor(-788486);
+        linearLayoutColumn.setPadding(dp(20), dp(12), dp(20), dp(20));
+        return linearLayoutColumn;
+    }
+
+    private GradientDrawable glass(int i, int i2) {
+        GradientDrawable gradientDrawableGradient = gradient(i, i2, 18);
+        gradientDrawableGradient.setStroke(dp(1), -1971984);
+        return gradientDrawableGradient;
+    }
+
+    private GradientDrawable gradient(int i, int i2, int i3) {
+        GradientDrawable gradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{i, i2});
+        gradientDrawable.setCornerRadius(dp(i3));
+        return gradientDrawable;
+    }
+
+    private void heroMetric(LinearLayout linearLayout, String str, int i) {
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setGravity(17);
+        linearLayout.addView(linearLayoutColumn, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        TextView textViewText = text(String.valueOf(i), 27);
+        textViewText.setGravity(17);
+        textViewText.setTextColor(-1);
+        linearLayoutColumn.addView(textViewText);
+        TextView textViewText2 = text(str, 11);
+        textViewText2.setGravity(17);
+        textViewText2.setTextColor(-2955027);
+        linearLayoutColumn.addView(textViewText2);
+    }
+
+    private void home() {
+        JSONObject jSONObject = this.store.query("SELECT COUNT(*) AS customers, SUM(CASE WHEN stage<4 THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage<4 AND followUp<>'' AND followUp<=? THEN 1 ELSE 0 END) AS due FROM leads WHERE business=?", LocalDate.now().toString(), this.business).get(0);
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setPadding(dp(18), dp(12), dp(18), dp(14));
+        linearLayoutColumn.setBackground(UiTheme.surface(this, true, 22));
+        linearLayoutColumn.setElevation(dp(3));
+        this.content.addView(linearLayoutColumn, new LinearLayout.LayoutParams(-1, -2));
+        TextView textViewText = text(tr("أعمالك اليوم", "Your work today"), 19);
+        textViewText.setTextColor(-1);
+        linearLayoutColumn.addView(textViewText);
+        LinearLayout linearLayoutRow = row();
+        linearLayoutColumn.addView(linearLayoutRow);
+        heroMetric(linearLayoutRow, tr("العملاء", "Customers"), jSONObject.optInt("customers"));
+        heroMetric(linearLayoutRow, tr("فرص نشطة", "Active"), jSONObject.optInt("active"));
+        heroMetric(linearLayoutRow, tr("متابعات اليوم", "Due today"), jSONObject.optInt("due"));
+        TextView textViewText2 = text(tr("الوصول السريع", "Quick access"), 19);
+        textViewText2.setPadding(0, dp(12), 0, dp(4));
+        this.content.addView(textViewText2);
+        LinearLayout linearLayoutRow2 = row();
+        this.content.addView(linearLayoutRow2);
+        homeAction(linearLayoutRow2, tr("العملاء", "Customers"), "clients", 0, 0, -15434365, new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$home$4();
+            }
+        });
+        homeAction(linearLayoutRow2, tr("المتابعات", "Follow-ups"), "today", 0, 0, -15434365, new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$home$5();
+            }
+        });
+        LinearLayout linearLayoutRow3 = row();
+        this.content.addView(linearLayoutRow3);
+        homeAction(linearLayoutRow3, tr("الدفاتر", "Ledgers"), "ledger", 0, 0, -15434365, new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$home$6();
+            }
+        });
+        homeAction(linearLayoutRow3, tr("المنشورات", "Posts"), "ads", 0, 0, -15434365, new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$home$7();
+            }
+        });
+        LinearLayout linearLayoutRow4 = row();
+        this.content.addView(linearLayoutRow4);
+        homeAction(linearLayoutRow4, tr("الحاسبة", "Calculator"), "calculator", 0, 0, -15434365, new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$home$8();
+            }
+        });
+        homeAction(linearLayoutRow4, tr("التقارير", "Reports"), "reports", 0, 0, -15434365, new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$home$9();
+            }
+        });
+        ArrayList<JSONObject> arrayListQuery = this.store.query("SELECT * FROM leads WHERE business=? AND stage<4 AND followUp<>'' ORDER BY followUp,followTime LIMIT 1", this.business);
+        if (arrayListQuery.isEmpty()) {
+            return;
+        }
+        this.content.addView(text(tr("أقرب متابعة", "Next follow-up"), 17));
+        homeFollowUp(arrayListQuery.get(0));
+    }
+
+    private void homeAction(LinearLayout linearLayout, String str, String str2, int i, int i2, int i3, final Runnable runnable) {
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setGravity(17);
+        linearLayoutColumn.setPadding(dp(8), dp(8), dp(8), dp(8));
+        UiTheme.sectionCard(linearLayoutColumn, str2);
+        linearLayoutColumn.setClickable(true);
+        linearLayoutColumn.setForeground(new RippleDrawable(ColorStateList.valueOf(403996035), null, null));
+        UiTheme.motion(linearLayoutColumn);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        layoutParams.setMargins(dp(3), dp(4), dp(3), dp(4));
+        linearLayoutColumn.setMinimumHeight(dp(88));
+        linearLayout.addView(linearLayoutColumn, layoutParams);
+        linearLayoutColumn.addView(new GlassIcon(this, str2), new LinearLayout.LayoutParams(dp(40), dp(40)));
+        TextView textViewText = text(str, 14);
+        textViewText.setTypeface(this.cairo, 1);
+        textViewText.setTextColor(-15717821);
+        textViewText.setGravity(17);
+        textViewText.setSingleLine(true);
+        textViewText.setIncludeFontPadding(false);
+        textViewText.setAutoSizeTextTypeUniformWithConfiguration(12, 14, 1, 2);
+        textViewText.setPadding(0, dp(4), 0, 0);
+        linearLayoutColumn.addView(textViewText, new LinearLayout.LayoutParams(-1, -2));
+        linearLayoutColumn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                MainActivity.lambda$homeAction$10(runnable, view);
+            }
+        });
+    }
+
+    private void homeFollowUp(final JSONObject jSONObject) {
+        LinearLayout linearLayoutCard = card(this.content);
+        linearLayoutCard.setOrientation(0);
+        linearLayoutCard.setGravity(16);
+        linearLayoutCard.setPadding(dp(14), dp(10), dp(14), dp(10));
+        linearLayoutCard.addView(new Glyph(this, "today", -15434365), new LinearLayout.LayoutParams(dp(23), dp(23)));
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setPadding(dp(10), 0, dp(10), 0);
+        linearLayoutCard.addView(linearLayoutColumn, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        linearLayoutColumn.addView(text(jSONObject.optString("name").isEmpty() ? "عميل غير مسمى" : jSONObject.optString("name"), 16));
+        muted(linearLayoutColumn, jSONObject.optString("interest").isEmpty() ? "متابعة عميل" : jSONObject.optString("interest"));
+        TextView textViewText = text(jSONObject.optString("followTime", "09:00"), 14);
+        textViewText.setTextColor(-10192758);
+        linearLayoutCard.addView(textViewText);
+        linearLayoutCard.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                MainActivity.this.lambda$homeFollowUp$12(jSONObject, view);
+            }
+        });
+    }
+
+    private void homeSummary(LinearLayout linearLayout, String str, int i, String str2, int i2) {
+        LinearLayout linearLayoutRow = row();
+        linearLayoutRow.setPadding(0, dp(8), 0, dp(8));
+        linearLayout.addView(linearLayoutRow, new LinearLayout.LayoutParams(-1, -2));
+        linearLayoutRow.addView(new Glyph(this, str2, i2), new LinearLayout.LayoutParams(dp(24), dp(24)));
+        TextView textViewText = text(str, 15);
+        textViewText.setPadding(dp(12), 0, 0, 0);
+        linearLayoutRow.addView(textViewText, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        TextView textViewText2 = text(String.valueOf(i), 20);
+        textViewText2.setTextColor(i2);
+        linearLayoutRow.addView(textViewText2);
+    }
+
+    private void homeWideAction(String str, String str2, int i, int i2, int i3, final Runnable runnable) {
+        LinearLayout linearLayoutRow = row();
+        linearLayoutRow.setGravity(16);
+        linearLayoutRow.setPadding(dp(14), dp(7), dp(14), dp(7));
+        linearLayoutRow.setBackground(glass(-1, -525828));
+        linearLayoutRow.setElevation(dp(3));
+        linearLayoutRow.setClickable(true);
+        linearLayoutRow.setForeground(new RippleDrawable(ColorStateList.valueOf(303003246), null, null));
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, dp(66));
+        layoutParams.setMargins(0, dp(4), 0, 0);
+        this.content.addView(linearLayoutRow, layoutParams);
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setGravity(17);
+        linearLayoutColumn.setBackground(shape(i3, 14, 0));
+        linearLayoutColumn.addView(new Glyph(this, str2, -1), new LinearLayout.LayoutParams(dp(26), dp(26)));
+        linearLayoutRow.addView(linearLayoutColumn, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        TextView textViewText = text(str, 15);
+        textViewText.setTextColor(-15717821);
+        textViewText.setSingleLine(true);
+        textViewText.setPadding(dp(12), 0, dp(6), 0);
+        linearLayoutRow.addView(textViewText, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        TextView textViewText2 = text("‹", 26);
+        textViewText2.setTextColor(i3);
+        linearLayoutRow.addView(textViewText2);
+        linearLayoutRow.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                runnable.run();
+            }
+        });
+    }
+
+    private void importCallCsv(final Uri uri) {
+        if (this.importing) {
+            return;
+        }
+        this.importing = true;
+        History.status(this, "جارٍ فحص ملف سجل المكالمات…");
+        this.backgroundOps++;
+        new Thread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$importCallCsv$82(uri);
+            }
+        }, "call-csv-import").start();
+    }
+
+    private void importContactVcf(final Uri uri) {
+        this.backgroundOps++;
+        new Thread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$importContactVcf$84(uri);
+            }
+        }, "contact-vcf-import").start();
+    }
+
+    private void importHistory() {
+        getSharedPreferences("settings", 0).edit().putLong("historyId", 0L).apply();
+        syncHistory(true);
+    }
+
+    public /* synthetic */ void lambda$adCopy$130(AlertDialog[] alertDialogArr, String str, String str2, String[] strArr, int i, String[] strArr2) {
+        try {
+            alertDialogArr[0].dismiss();
+            lambda$advertising$114(new JSONObject().put("business", str).put("title", str2 + " — " + strArr[i]).put("body", strArr2[i]).put("category", i == 2 ? "معلومة" : "تعريف"));
+        } catch (Exception unused) {
+            alert("تعذر تجهيز المنشور");
+        }
+    }
+
+    public /* synthetic */ void lambda$adCopy$131(String[] strArr, int i) {
+        ((ClipboardManager) getSystemService("clipboard")).setPrimaryClip(ClipData.newPlainText("نص الدعاية", strArr[i]));
+    }
+
+    public /* synthetic */ void lambda$adCopy$132(EditText editText, EditText editText2, EditText editText3, EditText editText4, final String str, DialogInterface dialogInterface, int i) {
+        final String strTrim = editText.getText().toString().trim();
+        String strTrim2 = editText2.getText().toString().trim();
+        if (strTrim.isEmpty() || strTrim2.isEmpty()) {
+            alert("أدخل المنتج أو الميزة والفائدة أولًا");
+            return;
+        }
+        String strTrim3 = editText3.getText().toString().trim();
+        String strTrim4 = editText4.getText().toString().trim();
+        String str2 = (strTrim3.isEmpty() ? "" : "\n\n" + strTrim3) + "\nراسلنا لمعرفة التفاصيل" + (strTrim4.isEmpty() ? "" : "\n" + strTrim4);
+        final String[] strArr = {"تعريف مباشر", "سؤال يجذب الاهتمام", "منشور معلوماتي"};
+        final String[] strArr2 = {strTrim + "\n\n" + strTrim2 + str2, "هل تبحث عن " + strTrim + "؟\n\n" + strTrim2 + str2, "قبل اختيار " + strTrim + "، تعرّف على ما يفيد احتياجك:\n\n" + strTrim2 + str2};
+        LinearLayout linearLayoutForm = form();
+        final AlertDialog[] alertDialogArr = new AlertDialog[1];
+        for (int index = 0; index < 3; index++) {
+            final int i2 = index;
+            LinearLayout linearLayoutCard = this.card(linearLayoutForm);
+            linearLayoutCard.addView(this.text(strArr[i2], 19));
+            TextView textViewText = this.text(strArr2[i2], 15);
+            textViewText.setTextIsSelectable(true);
+            linearLayoutCard.addView(textViewText);
+            final MainActivity mainActivity = this;
+            mainActivity.button(linearLayoutCard, "استخدام هذه الصيغة", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$adCopy$130(alertDialogArr, str, strTrim, strArr, i2, strArr2);
+                }
+            });
+            mainActivity.button(linearLayoutCard, "نسخ النص", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$adCopy$131(strArr2, i2);
+                }
+            });
+        }
+        alertDialogArr[0] = this.panel("اختر الصيغة وعدّلها", linearLayoutForm);
+    }
+
+    public /* synthetic */ void lambda$advertising$111() {
+        editProfile(this.business);
+    }
+
+    public /* synthetic */ void lambda$advertising$112() {
+        try {
+            lambda$advertising$114(new JSONObject().put("business", this.business));
+        } catch (Exception unused) {
+            alert("تعذر فتح المحرر");
+        }
+    }
+
+    public /* synthetic */ void lambda$advertising$115(JSONObject jSONObject) {
+        try {
+            JSONObject jSONObject2 = new JSONObject(jSONObject.toString());
+            jSONObject2.remove("id");
+            jSONObject2.put("title", jSONObject.optString("title") + " — نسخة").put("plannedDate", "");
+            this.store.savePost(jSONObject2);
+            render();
+        } catch (Exception unused) {
+            alert("تعذر إنشاء نسخة");
+        }
+    }
+
+    public /* synthetic */ void lambda$advertising$116(JSONObject jSONObject) {
+        StringBuilder sb = new StringBuilder();
+        Iterator<JSONObject> it = this.store.query("SELECT at FROM postShares WHERE postId=? ORDER BY at DESC LIMIT 50", String.valueOf(jSONObject.optLong("id"))).iterator();
+        while (it.hasNext()) {
+            sb.append(DateFormat.format("yyyy-MM-dd HH:mm", it.next().optLong("at"))).append("\n");
+        }
+        alert(sb.length() == 0 ? "لم يُفتح للمشاركة بعد" : sb.toString());
+    }
+
+    public /* synthetic */ void lambda$advertising$117() {
+        this.adLimit -= 20;
+        render();
+    }
+
+    public /* synthetic */ void lambda$advertising$118() {
+        this.adLimit += 20;
+        render();
+    }
+
+    public /* synthetic */ void lambda$askRestorePassword$98(String str, DialogInterface dialogInterface, int i) {
+        restoreDocument(str, null);
+    }
+
+    public /* synthetic */ void lambda$askRestorePassword$99(String str, EditText editText, DialogInterface dialogInterface, int i) {
+        restoreDocument(str, editText.getText().toString().toCharArray());
+    }
+
+    static /* synthetic */ void lambda$button$0(Runnable runnable, View view) {
+        UiTheme.feedback(view);
+        runnable.run();
+    }
+
+    public /* synthetic */ void lambda$calculatorCard$27(View view) {
+        startActivity(new Intent(this, (Class<?>) CalculatorActivity.class));
+    }
+
+    public /* synthetic */ void lambda$callSetup$87(Spinner spinner, DialogInterface dialogInterface, int i) {
+        String str;
+        SharedPreferences.Editor editorPutBoolean = getSharedPreferences("settings", 0).edit().putBoolean("calls", true).putBoolean("autoSync", true);
+        if (spinner.getSelectedItemPosition() == 1) {
+            str = "survey";
+        } else {
+            str = spinner.getSelectedItemPosition() == 2 ? "software" : "";
+        }
+        editorPutBoolean.putString("newBusiness", str).apply();
+        RoleManager roleManager = (RoleManager) getSystemService(RoleManager.class);
+        if (!roleManager.isRoleAvailable("android.app.role.CALL_SCREENING") || roleManager.isRoleHeld("android.app.role.CALL_SCREENING")) {
+            requestCallPermissions();
+        } else {
+            getSharedPreferences("settings", 0).edit().putBoolean("setupPending", true).apply();
+            startActivityForResult(roleManager.createRequestRoleIntent("android.app.role.CALL_SCREENING"), 11);
+        }
+    }
+
+    public /* synthetic */ void lambda$chooseBackupPassword$88(EditText editText, EditText editText2, DialogInterface dialogInterface, int i) {
+        String string = editText.getText().toString();
+        String string2 = editText2.getText().toString();
+        if (string.length() < 8 || !string.equals(string2)) {
+            alert("كلمتا المرور غير متطابقتين أو أقصر من 8 أحرف");
+        } else {
+            this.pendingBackupPassword = string.toCharArray();
+            startActivityForResult(new Intent("android.intent.action.CREATE_DOCUMENT").setType("application/json").putExtra("android.intent.extra.TITLE", "engineering-crm-backup.ecrm").addCategory("android.intent.category.OPENABLE"), 20);
+        }
+    }
+
+    public /* synthetic */ void lambda$chooseCsvExport$89(DialogInterface dialogInterface, int i) {
+        chooseCsvKind();
+    }
+
+    public /* synthetic */ void lambda$chooseCsvKind$90(DialogInterface dialogInterface, int i) {
+        String str;
+        String str2;
+        if (i == 0) {
+            str = "customers";
+        } else {
+            str = i == 1 ? "quotes" : "ledger";
+        }
+        this.pendingCsv = str;
+        if (str.equals("customers")) {
+            str2 = "customers.csv";
+        } else {
+            str2 = this.pendingCsv.equals("quotes") ? "quotes.csv" : "ledger.csv";
+        }
+        startActivityForResult(new Intent("android.intent.action.CREATE_DOCUMENT").setType("text/csv").addCategory("android.intent.category.OPENABLE").putExtra("android.intent.extra.TITLE", str2), 41);
+    }
+
+    public /* synthetic */ void lambda$chooseLanguage$76(boolean z, DialogInterface dialogInterface, int i) {
+        boolean z2 = i == 1;
+        if (z2 == z) {
+            dialogInterface.dismiss();
+            return;
+        }
+        AppLanguage.set(this, z2);
+        dialogInterface.dismiss();
+        Intent intent = new Intent(this, (Class<?>) MainActivity.class);
+        intent.addFlags(268468224);
+        startActivity(intent);
+        finish();
+    }
+
+    public /* synthetic */ void lambda$chooseQuick$57(JSONObject jSONObject, Spinner spinner, ArrayList arrayList, Analysis analysis, String str, DialogInterface dialogInterface, int i) {
+        quickPanel(jSONObject, spinner.getSelectedItemPosition() == 0 ? new JSONObject() : (JSONObject) arrayList.get(spinner.getSelectedItemPosition() - 1), analysis, str);
+    }
+
+    public /* synthetic */ void lambda$clients$13() {
+        startActivity(new Intent(this, (Class<?>) SoftwareActivity.class));
+    }
+
+    public /* synthetic */ void lambda$clients$14() {
+        startActivity(new Intent(this, (Class<?>) QuoteActivity.class));
+    }
+
+    public /* synthetic */ void lambda$clients$15() {
+        edit(new JSONObject(), 0L);
+    }
+
+    public /* synthetic */ void lambda$clients$16(DialogInterface dialogInterface, int i) {
+        int iRemoveUnassigned = this.store.removeUnassigned();
+        this.selectedCalls.clear();
+        render();
+        alert("تم حذف " + iRemoveUnassigned + " رقمًا غير معتمد");
+    }
+
+    public /* synthetic */ void lambda$clients$17() {
+        new FluentDialog(this).setTitle("حذف الأرقام للمراجعة").setMessage("سيُحذف فقط ما لم تعتمدْه كعميل. لا يمكن التراجع إلا من نسخة احتياطية.").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("حذف", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$clients$16(dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public /* synthetic */ void lambda$clients$18(EditText editText) {
+        this.search = editText.getText().toString().trim();
+        this.limit = 100;
+        render();
+    }
+
+    static /* synthetic */ boolean lambda$clients$19(Button button, TextView textView, int i, KeyEvent keyEvent) {
+        if (i != 3) {
+            return false;
+        }
+        button.performClick();
+        return true;
+    }
+
+    public /* synthetic */ void lambda$clients$20(ArrayList arrayList) {
+        for (int i = 0; i < Math.min(this.limit, arrayList.size()); i++) {
+            this.selectedCalls.add(Long.valueOf(((JSONObject) arrayList.get(i)).optLong("id")));
+        }
+        render();
+    }
+
+    public /* synthetic */ void lambda$clients$21() {
+        this.limit += 100;
+        render();
+    }
+
+    static /* synthetic */ void lambda$contactDisclosure$77(Runnable runnable, DialogInterface dialogInterface, int i) {
+        if (runnable != null) {
+            runnable.run();
+        }
+    }
+
+    public /* synthetic */ void lambda$contactDisclosure$78(int i, DialogInterface dialogInterface, int i2) {
+        requestPermissions(new String[]{"android.permission.READ_CONTACTS"}, i);
+    }
+
+    public /* synthetic */ void lambda$customerFilters$22(int i) {
+        this.customerStageFilter = i;
+        this.limit = 100;
+        render();
+    }
+
+    public /* synthetic */ void lambda$designPost$133(EditText editText, EditText editText2, EditText editText3, EditText editText4, Spinner spinner, DialogInterface dialogInterface, int i) {
+        final MainActivity mainActivity = this;
+        String strTrim = editText.getText().toString().trim();
+        String strTrim2 = editText2.getText().toString().trim();
+        String strTrim3 = editText3.getText().toString().trim();
+        String strTrim4 = editText4.getText().toString().trim();
+        if (strTrim.isEmpty() || strTrim.length() > 80 || strTrim2.length() > 180 || strTrim3.length() > 60 || strTrim4.length() > 60) {
+            alert("اختصر العنوان إلى 80 حرفًا والنص إلى 180 واسم النشاط والتواصل إلى 60 حرفًا");
+            return;
+        }
+        try {
+                mainActivity.postDraft.put("image", PostDesigns.create(mainActivity, this.postDraft.optString("image"), strTrim, strTrim2, strTrim3, strTrim4, spinner.getSelectedItemPosition()));
+                mainActivity.lambda$advertising$114(mainActivity.postDraft);
+        } catch (Exception e) {
+                mainActivity.alert(e.getMessage() == null ? "تعذر إنشاء التصميم" : e.getMessage());
+        }
+    }
+
+    public /* synthetic */ void lambda$edit$41(Spinner spinner, Spinner spinner2, String[] strArr, Spinner spinner3) {
+        String str;
+        boolean z = spinner.getSelectedItemPosition() == 1;
+        spinner2.setEnabled(z);
+        if (spinner.getSelectedItemPosition() == 2) {
+            str = "software";
+        } else {
+            str = z ? "survey" : "";
+        }
+        String str2 = z ? SurveyRequests.KEYS[spinner2.getSelectedItemPosition()] : "sales";
+        String str3 = str + ":" + str2;
+        if (str3.equals(strArr[0])) {
+            return;
+        }
+        spinner3.setAdapter((SpinnerAdapter) new ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, stages(str, str2)));
+        spinner3.setSelection(0);
+        strArr[0] = str3;
+    }
+
+    public /* synthetic */ void lambda$edit$42(EditText editText, View view) {
+        lambda$edit$45(editText);
+    }
+
+    public /* synthetic */ void lambda$edit$44(final EditText editText) {
+        LocalTime localTimeOf;
+        try {
+            localTimeOf = LocalTime.parse(editText.getText());
+        } catch (Exception unused) {
+            localTimeOf = LocalTime.of(9, 0);
+        }
+        new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
+            @Override
+            public final void onTimeSet(TimePicker timePicker, int i, int i2) {
+                editText.setText(String.format(Locale.US, "%02d:%02d", Integer.valueOf(i), Integer.valueOf(i2)));
+            }
+        }, localTimeOf.getHour(), localTimeOf.getMinute(), true).show();
+    }
+
+    public /* synthetic */ void lambda$edit$47(JSONObject jSONObject, AlertDialog alertDialog, DialogInterface dialogInterface, int i) {
+        this.store.remove(jSONObject.optLong("id"));
+        alertDialog.dismiss();
+        render();
+        Reminders.schedule(this);
+    }
+
+    public /* synthetic */ void lambda$edit$48(final JSONObject jSONObject, final AlertDialog alertDialog) {
+        new FluentDialog(this).setMessage("حذف العميل نهائيًا؟ ستبقى الرسائل الأصلية في أرشيف الرسائل.").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("حذف", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$edit$47(jSONObject, alertDialog, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public /* synthetic */ void lambda$edit$49(JSONObject jSONObject, EditText editText, EditText editText2, Spinner spinner, Spinner spinner2, Spinner spinner3, EditText editText3, EditText editText4, EditText editText5, EditText editText6, EditText editText7, EditText editText8, long j, AlertDialog alertDialog, CheckBox checkBox, View view) {
+        String message;
+        String str;
+        try {
+            JSONObject jSONObjectPut = jSONObject.put("name", editText.getText().toString()).put("phone", editText2.getText().toString());
+            if (spinner.getSelectedItemPosition() == 1) {
+                str = "survey";
+            } else {
+                str = spinner.getSelectedItemPosition() == 2 ? "software" : "";
+            }
+            jSONObjectPut.put("business", str).put("stage", spinner2.getSelectedItemPosition()).put("requestType", spinner.getSelectedItemPosition() == 1 ? SurveyRequests.KEYS[spinner3.getSelectedItemPosition()] : "sales").put("company", editText3.getText().toString()).put("email", editText4.getText().toString()).put("interest", editText5.getText().toString()).put("followUp", editText6.getText().toString()).put("notes", editText7.getText().toString()).put("followTime", editText8.getText().toString());
+            SQLiteDatabase writableDatabase = this.store.getWritableDatabase();
+            writableDatabase.beginTransaction();
+            try {
+                long jSave = this.store.save(jSONObject);
+                if (j > 0) {
+                    this.store.reviewed(j, jSave);
+                }
+                ((NotificationManager) getSystemService(NotificationManager.class)).cancel("lead", (int) jSave);
+                writableDatabase.setTransactionSuccessful();
+                writableDatabase.endTransaction();
+                alertDialog.dismiss();
+                render();
+                Reminders.schedule(this);
+                if (checkBox.isChecked()) {
+                    lambda$tools$33(jSONObject);
+                }
+            } catch (Throwable th) {
+                writableDatabase.endTransaction();
+                throw th;
+            }
+        } catch (SQLiteConstraintException unused) {
+            message = "هذا الرقم موجود بالفعل. اربط الرسالة بالعميل الموجود أو عدّل سجله.";
+            alert(message);
+        } catch (Exception e) {
+            message = e.getMessage() == null ? "تعذر الحفظ" : e.getMessage();
+            alert(message);
+        }
+    }
+
+    public /* synthetic */ void lambda$edit$50(final AlertDialog alertDialog, final JSONObject jSONObject, final EditText editText, final EditText editText2, final Spinner spinner, final Spinner spinner2, final Spinner spinner3, final EditText editText3, final EditText editText4, final EditText editText5, final EditText editText6, final EditText editText7, final EditText editText8, final long j, final CheckBox checkBox, DialogInterface dialogInterface) {
+        alertDialog.getButton(-1).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                MainActivity.this.lambda$edit$49(jSONObject, editText, editText2, spinner, spinner2, spinner3, editText3, editText4, editText5, editText6, editText7, editText8, j, alertDialog, checkBox, view);
+            }
+        });
+    }
+
+    public /* synthetic */ void lambda$editPost$119() {
+        EditText editText = this.postInputs.get("body");
+        if (editText == null) {
+            return;
+        }
+        String strProfileFooter = profileFooter(this.postDraft.optString("business"), true);
+        if (strProfileFooter.isEmpty()) {
+            alert("أضف بيانات المنشأة من الإعدادات أولًا");
+        } else {
+            if (editText.getText().toString().contains(strProfileFooter)) {
+                return;
+            }
+            editText.append("\n\n" + strProfileFooter);
+        }
+    }
+
+    public /* synthetic */ void lambda$editPost$120() {
+        capturePost();
+        this.postDialog.dismiss();
+        startActivityForResult(new Intent("android.intent.action.OPEN_DOCUMENT").setType("image/*").addCategory("android.intent.category.OPENABLE"), 30);
+    }
+
+    public /* synthetic */ void lambda$editPost$121() {
+        capturePost();
+        try {
+            String strOptString = this.postDraft.optString("image");
+            this.postDraft.put("image", "");
+            this.store.removeUnusedImage(strOptString);
+            lambda$advertising$114(this.postDraft);
+        } catch (Exception unused) {
+        }
+    }
+
+    public /* synthetic */ void lambda$editPost$122() {
+        capturePost();
+        designPost();
+    }
+
+    public /* synthetic */ void lambda$editPost$124(final EditText editText) {
+        LocalDate localDateNow = LocalDate.now();
+        new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+            @Override
+            public final void onDateSet(DatePicker datePicker, int i, int i2, int i3) {
+                editText.setText(LocalDate.of(i, i2 + 1, i3).toString());
+            }
+        }, localDateNow.getYear(), localDateNow.getMonthValue() - 1, localDateNow.getDayOfMonth()).show();
+    }
+
+    public /* synthetic */ void lambda$editPost$126() {
+        capturePost();
+        try {
+            this.store.savePost(this.postDraft);
+            this.postDialog.dismiss();
+            this.postDraft = null;
+            this.postInputs.clear();
+            this.tab = "ads";
+            render();
+        } catch (Exception e) {
+            alert(e.getMessage() == null ? "تعذر حفظ المنشور" : e.getMessage());
+        }
+    }
+
+    public /* synthetic */ void lambda$editPost$127(long j, DialogInterface dialogInterface, int i) {
+        this.store.removePost(j);
+        this.postDialog.dismiss();
+        this.postDraft = null;
+        this.postInputs.clear();
+        render();
+    }
+
+    public /* synthetic */ void lambda$editPost$128(final long j) {
+        new FluentDialog(this).setMessage("حذف هذا المنشور وسجل فتح مشاركته؟").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("حذف", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$editPost$127(j, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public /* synthetic */ void lambda$editPost$129(DialogInterface dialogInterface, int i) {
+        this.postDraft = null;
+        this.postInputs.clear();
+    }
+
+    public /* synthetic */ void lambda$editProfile$134(Spinner spinner, EditText editText, JSONObject jSONObject, Map map, Map map2, String str, AlertDialog[] alertDialogArr) {
+        try {
+            int selectedItemPosition = spinner.getSelectedItemPosition();
+            String[] strArr = ORGANIZATION_ACTIVITIES;
+            boolean z = true;
+            if (selectedItemPosition != strArr.length - 1) {
+                z = false;
+            }
+            String strTrim = z ? editText.getText().toString().trim() : strArr[spinner.getSelectedItemPosition()];
+            if (strTrim.isEmpty()) {
+                throw new IllegalArgumentException("اكتب نشاط المنشأة أولًا");
+            }
+            JSONObject jSONObjectPut = jSONObject.put("organizationActivityType", z ? "other" : "").put("organizationActivityName", strTrim);
+            if (!z) {
+                strTrim = "";
+            }
+            jSONObjectPut.put("organizationActivityCustom", strTrim);
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) map).entrySet()) {
+                jSONObject.put((String) entry.getKey(), ((EditText) entry.getValue()).getText().toString().trim());
+            }
+            JSONObject jSONObject2 = new JSONObject();
+            for (Map.Entry<?, ?> entry2 : ((Map<?, ?>) map2).entrySet()) {
+                jSONObject2.put((String) entry2.getKey(), ((CheckBox) entry2.getValue()).isChecked());
+            }
+            jSONObject.put("advertising", jSONObject2);
+            this.store.saveProfile(str, jSONObject);
+            alertDialogArr[0].dismiss();
+            render();
+            alert("حُفظت بيانات المنشأة ونوع نشاطها");
+        } catch (Exception e) {
+            alert(e.getMessage() == null ? "تحقق من البيانات والروابط" : e.getMessage());
+        }
+    }
+
+    public /* synthetic */ void lambda$editProfile$135(String str) {
+        StringBuilder sb = new StringBuilder();
+        JSONObject jSONObjectProfile = this.store.profile(str);
+        for (String[] strArr : Profiles.FIELDS) {
+            String strOptString = jSONObjectProfile.optString(strArr[0]);
+            if (!strOptString.isEmpty()) {
+                sb.append(strArr[1]).append(": ").append(strOptString).append("\n");
+            }
+        }
+        ((ClipboardManager) getSystemService("clipboard")).setPrimaryClip(ClipData.newPlainText("بيانات المنشأة", sb.toString()));
+    }
+
+    public /* synthetic */ void lambda$editProfile$136(String str) {
+        try {
+            startActivity(new Intent("android.intent.action.VIEW", Uri.parse(Profiles.url(str))));
+        } catch (Exception unused) {
+            alert("تعذر فتح الرابط");
+        }
+    }
+
+    public /* synthetic */ void lambda$editTemplates$110(EditText editText, EditText editText2, DialogInterface dialogInterface, int i) {
+        try {
+            if (editText.getText().toString().trim().isEmpty() || editText2.getText().toString().trim().isEmpty()) {
+                throw new IllegalArgumentException("أدخل الاسم والنص");
+            }
+            JSONObject jSONObjectProfile = this.store.profile("survey");
+            JSONArray jSONArrayCustom = TemplateStore.custom(jSONObjectProfile);
+            jSONArrayCustom.put(new JSONObject().put("title", editText.getText().toString().trim()).put("body", editText2.getText().toString().trim()));
+            jSONObjectProfile.put("whatsappTemplates", jSONArrayCustom);
+            this.store.saveProfile("survey", jSONObjectProfile);
+            alert("حُفظ القالب المخصص");
+        } catch (Exception e) {
+            alert(e.getMessage() == null ? "تعذر حفظ القالب" : e.getMessage());
+        }
+    }
+
+    public /* synthetic */ void lambda$followAction$104(long j, boolean z, DialogInterface dialogInterface, int i) {
+        try {
+            this.store.finishFollowUp(j, z);
+            ((NotificationManager) getSystemService(NotificationManager.class)).cancel("lead", (int) j);
+            Reminders.schedule(this);
+            render();
+            alert(z ? "تم تأجيل المتابعة. أعد فتح العميل لرؤية الموعد الجديد." : "تم إتمام المتابعة. أعد فتح العميل لرؤية التحديث.");
+        } catch (Exception unused) {
+            alert("تعذر تحديث الموعد");
+        }
+    }
+
+    public /* synthetic */ void lambda$followUpDates$23(LocalDate localDate) {
+        this.followDate = localDate.toString();
+        render();
+    }
+
+    public /* synthetic */ void lambda$followUpDates$24(DatePicker datePicker, int i, int i2, int i3) {
+        this.followDate = LocalDate.of(i, i2 + 1, i3).toString();
+        render();
+    }
+
+    public /* synthetic */ void lambda$followUpDates$25() {
+        LocalDate localDateNow = this.followDate.isEmpty() ? LocalDate.now() : LocalDate.parse(this.followDate);
+        new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+            @Override
+            public final void onDateSet(DatePicker datePicker, int i, int i2, int i3) {
+                MainActivity.this.lambda$followUpDates$24(datePicker, i, i2, i3);
+            }
+        }, localDateNow.getYear(), localDateNow.getMonthValue() - 1, localDateNow.getDayOfMonth()).show();
+    }
+
+    public /* synthetic */ void lambda$followUpDates$26() {
+        this.followDate = "";
+        render();
+    }
+
+    public /* synthetic */ void lambda$home$4() {
+        this.tab = "clients";
+        render();
+    }
+
+    public /* synthetic */ void lambda$home$5() {
+        this.tab = "today";
+        render();
+    }
+
+    public /* synthetic */ void lambda$home$6() {
+        startActivity(new Intent(this, (Class<?>) LedgerActivity.class));
+    }
+
+    public /* synthetic */ void lambda$home$7() {
+        this.tab = "ads";
+        render();
+    }
+
+    public /* synthetic */ void lambda$home$8() {
+        startActivity(new Intent(this, (Class<?>) CalculatorActivity.class));
+    }
+
+    public /* synthetic */ void lambda$home$9() {
+        startActivity(new Intent(this, (Class<?>) ReportsActivity.class));
+    }
+
+    static /* synthetic */ void lambda$homeAction$10(Runnable runnable, View view) {
+        UiTheme.feedback(view);
+        runnable.run();
+    }
+
+    public /* synthetic */ void lambda$homeFollowUp$12(JSONObject jSONObject, View view) {
+        edit(jSONObject, 0L);
+    }
+
+    public /* synthetic */ void lambda$importCallCsv$81(String str) {
+        this.backgroundOps--;
+        this.importing = false;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        History.status(this, str);
+        this.tab = "unassigned";
+        render();
+        alert(str);
+    }
+
+    public /* synthetic */ void lambda$importCallCsv$82(Uri uri) {
+        String message;
+        try {
+            message = CallCsvImporter.run(getApplicationContext(), read(uri, 5242880)).message();
+        } catch (Exception e) {
+            message = "تعذر استيراد الملف: " + (e.getMessage() == null ? "تحقق من صيغة CSV" : e.getMessage());
+        }
+        final String strMessage = message;
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$importCallCsv$81(strMessage);
+            }
+        });
+    }
+
+    public /* synthetic */ void lambda$importContactVcf$83(String str) {
+        this.backgroundOps--;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        render();
+        alert(str);
+    }
+
+    public /* synthetic */ void lambda$importContactVcf$84(Uri uri) {
+        String message;
+        try {
+            Map<String, String> map = VCardImporter.parse(read(uri, 15728640));
+            this.store.cacheContactNames(map);
+            message = "تم حفظ " + map.size() + " اسمًا ورقمًا سعوديًا في دليل جهات الاتصال المحلي، وتحديث أسماء " + this.store.refreshContactNames(map) + " سجلًا موجودًا. لا تُضاف جهات الاتصال كعملاء تلقائيًا؛ ستظهر أسماؤها عند استيراد سجل مكالمات مطابق.";
+        } catch (Exception e) {
+            message = "تعذر استيراد جهات الاتصال: " + (e.getMessage() == null ? "تحقق من ملف VCF" : e.getMessage());
+        }
+        final String str = message;
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$importContactVcf$83(str);
+            }
+        });
+    }
+
+    public /* synthetic */ void lambda$leadCard$28(JSONObject jSONObject, CompoundButton compoundButton, boolean z) {
+        LinkedHashSet<Long> linkedHashSet = this.selectedCalls;
+        Long lValueOf = Long.valueOf(jSONObject.optLong("id"));
+        if (z) {
+            linkedHashSet.add(lValueOf);
+        } else {
+            linkedHashSet.remove(lValueOf);
+        }
+    }
+
+    public /* synthetic */ void lambda$leadCard$29(JSONObject jSONObject) {
+        edit(jSONObject, 0L);
+    }
+
+    public /* synthetic */ void lambda$leadCard$30(JSONObject jSONObject) {
+        this.selectedCalls.add(Long.valueOf(jSONObject.optLong("id")));
+        assignCalls();
+    }
+
+    public /* synthetic */ void lambda$leadCard$31(JSONObject jSONObject, String str) {
+        this.store.event(jSONObject.optLong("id"), "dial", "فتح شاشة الاتصال — لا يعني إتمام المكالمة", System.currentTimeMillis(), null);
+        startActivity(new Intent("android.intent.action.DIAL", Uri.parse("tel:" + str)));
+    }
+
+    public /* synthetic */ void lambda$leadCard$32(String str) {
+        try {
+            startActivity(new Intent("android.intent.action.VIEW", Uri.parse("https://wa.me/" + str.replace("+", ""))));
+        } catch (Exception unused) {
+            alert(tr("لا يوجد تطبيق يستطيع فتح واتساب.", "No app can open WhatsApp."));
+        }
+    }
+
+    public /* synthetic */ void lambda$messages$52(JSONObject jSONObject, DialogInterface dialogInterface, int i) {
+        this.store.dismiss(jSONObject.optLong("id"));
+        render();
+    }
+
+    public /* synthetic */ void lambda$messages$53(final JSONObject jSONObject) {
+        new FluentDialog(this).setMessage("حذف هذه الرسالة من قائمة المراجعة؟").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("حذف", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$messages$52(jSONObject, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public /* synthetic */ void lambda$messages$54() {
+        this.limit += 100;
+        render();
+    }
+
+    public /* synthetic */ void lambda$messages$55() {
+        ArrayList<JSONObject> arrayListQuery = this.store.query("SELECT sender, body FROM messages WHERE state='reviewed' ORDER BY at DESC LIMIT 50", new String[0]);
+        StringBuilder sb = new StringBuilder();
+        for (JSONObject jSONObject : arrayListQuery) {
+            sb.append(jSONObject.optString("sender")).append(": ").append(jSONObject.optString("body")).append("\n\n");
+        }
+        alert(sb.length() == 0 ? "لا يوجد أرشيف بعد" : sb.toString());
+    }
+
+    public /* synthetic */ void lambda$pasteText$59(EditText editText, DialogInterface dialogInterface, int i) {
+        String string = editText.getText().toString();
+        if (string.trim().isEmpty() || string.length() > 100000) {
+            alert("أدخل نصًا حتى 100 ألف حرف");
+        } else {
+            saveSharedText(string, "");
+        }
+    }
+
+    public /* synthetic */ void lambda$quickPanel$58(EditText editText, EditText editText2, JSONObject jSONObject, Spinner spinner, Map map, LinkedHashMap linkedHashMap, JSONObject jSONObject2, Map map2, Analysis analysis, JSONObject jSONObject3, AlertDialog[] alertDialogArr) {
+        String message;
+        try {
+            String strTrim = editText.getText().toString().trim();
+            String strTrim2 = editText2.getText().toString().trim();
+            if (strTrim2.isEmpty()) {
+                strTrim2 = Analysis.phone(strTrim);
+            }
+            jSONObject.put("name", strTrim2).put("phone", strTrim).put("business", spinner.getSelectedItemPosition() == 1 ? "survey" : spinner.getSelectedItemPosition() == 2 ? "software" : "");
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) map).entrySet()) {
+                if (((CheckBox) entry.getValue()).isChecked()) {
+                    jSONObject.put((String) entry.getKey(), linkedHashMap.get(entry.getKey()));
+                }
+            }
+            SQLiteDatabase writableDatabase = this.store.getWritableDatabase();
+            writableDatabase.beginTransaction();
+            try {
+                long jSave = this.store.save(jSONObject);
+                String strOptString = jSONObject.optString("business");
+                JSONObject jSONObjectOptJSONObject = jSONObject2.optJSONObject(strOptString);
+                if (jSONObjectOptJSONObject == null) {
+                    jSONObjectOptJSONObject = new JSONObject();
+                }
+                boolean z = false;
+                for (Map.Entry<?, ?> entry2 : ((Map<?, ?>) map2).entrySet()) {
+                    if (((CheckBox) entry2.getValue()).isChecked() && allowedDetail(strOptString, (String) entry2.getKey())) {
+                        jSONObjectOptJSONObject.put((String) entry2.getKey(), analysis.details.get(entry2.getKey()));
+                        z = true;
+                    }
+                }
+                if (z) {
+                    jSONObject2.put(strOptString, jSONObjectOptJSONObject);
+                    this.store.request(jSave, jSONObject2);
+                }
+                this.store.reviewed(jSONObject3.optLong("id"), jSave);
+                writableDatabase.setTransactionSuccessful();
+                writableDatabase.endTransaction();
+                alertDialogArr[0].dismiss();
+                render();
+                Reminders.schedule(this);
+                alert("حُفظ العميل والمعلومات المختارة");
+            } catch (Throwable th) {
+                writableDatabase.endTransaction();
+                throw th;
+            }
+        } catch (SQLiteConstraintException unused) {
+            message = "هذا الرقم موجود بالفعل. اختر العميل الموجود للربط.";
+            alert(message);
+        } catch (Exception e) {
+            message = e.getMessage() == null ? "تعذر الحفظ" : e.getMessage();
+            alert(message);
+        }
+    }
+
+    public /* synthetic */ void lambda$receive$102(String str, String str2, String str3) {
+        this.backgroundOps--;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        if (str != null) {
+            alert("تعذر قراءة المشاركة؛ جرّب مشاركة نص الرسالة فقط");
+        } else {
+            saveShared(str2, str3);
+        }
+    }
+
+    public /* synthetic */ void lambda$receive$103(Uri uri, final String str) {
+        String body = null;
+        String failure = null;
+        try {
+            body = read(uri, 1048576);
+        } catch (Exception e) {
+            failure = e.getMessage();
+        }
+        final String str2 = body;
+        final String message = failure;
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$receive$102(message, str2, str);
+            }
+        });
+    }
+
+    static /* synthetic */ WindowInsets lambda$render$1(View view, WindowInsets windowInsets) {
+        int systemWindowInsetTop;
+        int systemWindowInsetBottom;
+        if (Build.VERSION.SDK_INT >= 30) {
+            Insets insets = windowInsets.getInsets(WindowInsets.Type.systemBars());
+            systemWindowInsetTop = insets.top;
+            systemWindowInsetBottom = insets.bottom;
+        } else {
+            systemWindowInsetTop = windowInsets.getSystemWindowInsetTop();
+            systemWindowInsetBottom = windowInsets.getSystemWindowInsetBottom();
+        }
+        view.setPadding(0, systemWindowInsetTop, 0, systemWindowInsetBottom);
+        return windowInsets;
+    }
+
+    public /* synthetic */ void lambda$render$2(View view) {
+        switchLanguage();
+    }
+
+    public /* synthetic */ void lambda$render$3(String[] strArr, View view) {
+        this.tab = strArr[0];
+        this.limit = 100;
+        render();
+    }
+
+    public /* synthetic */ void lambda$requestDetails$106(JSONObject jSONObject, String[][] strArr, Map map, JSONObject jSONObject2, String str, long j, AlertDialog[] alertDialogArr) {
+        try {
+            JSONObject jSONObject3 = new JSONObject(jSONObject.toString());
+            for (String[] strArr2 : strArr) {
+                String strTrim = ((EditText) map.get(strArr2[0])).getText().toString().trim();
+                if (!strTrim.isEmpty() && (strArr2[0].endsWith("Date") || strArr2[0].equals("subscriptionEnd"))) {
+                    LocalDate.parse(strTrim);
+                }
+                if (!strTrim.isEmpty() && strArr2[0].equals("quantity") && Integer.parseInt(strTrim) < 1) {
+                    throw new IllegalArgumentException("الكمية يجب أن تكون أكبر من صفر");
+                }
+                if (!strTrim.isEmpty() && strArr2[0].equals("budget") && new BigDecimal(strTrim).signum() < 0) {
+                    throw new IllegalArgumentException("الميزانية غير صالحة");
+                }
+                jSONObject3.put(strArr2[0], strTrim);
+            }
+            jSONObject2.put(str, jSONObject3);
+            this.store.request(j, jSONObject2);
+            alertDialogArr[0].dismiss();
+            alert("حُفظت تفاصيل الطلب");
+        } catch (Exception unused) {
+            alert("تحقق من الكمية والميزانية والتواريخ بصيغة YYYY-MM-DD");
+        }
+    }
+
+    public /* synthetic */ void lambda$restoreDocument$100(boolean z, String str) {
+        this.backgroundOps--;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        if (z) {
+            ((NotificationManager) getSystemService(NotificationManager.class)).cancelAll();
+            render();
+            Reminders.schedule(this);
+        }
+        alert(str);
+    }
+
+    public /* synthetic */ void lambda$restoreDocument$101(char[] cArr, String str) {
+        String result;
+        boolean restored = false;
+        try {
+            this.store.restore(new JSONObject(new String(cArr == null ? str.getBytes(StandardCharsets.UTF_8) : BackupCipher.decrypt(str, cArr), StandardCharsets.UTF_8)));
+            getSharedPreferences("settings", 0).edit().putLong("historyId", 0L).apply();
+            result = "اكتملت الاستعادة";
+            restored = true;
+        } catch (Exception e) {
+            result = "تعذر استعادة النسخة: " + (e.getMessage() == null ? "تحقق من كلمة المرور والملف" : e.getMessage());
+        } finally {
+            if (cArr != null) {
+                Arrays.fill(cArr, (char) 0);
+            }
+        }
+        final String str2 = result;
+        final boolean z = restored;
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$restoreDocument$100(z, str2);
+            }
+        });
+    }
+
+    public /* synthetic */ void lambda$restoreSelected$95(String str) {
+        this.backgroundOps--;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        alert("تعذر قراءة النسخة: " + str);
+    }
+
+    public /* synthetic */ void lambda$restoreSelected$96(String str, boolean z) {
+        this.backgroundOps--;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        askRestorePassword(str, z);
+    }
+
+    public /* synthetic */ void lambda$restoreSelected$97(Uri uri) {
+        try {
+            final String str = read(uri, MAX_ENCRYPTED_BACKUP_BYTES);
+            final boolean zEncrypted = BackupCipher.encrypted(str);
+            runOnUiThread(new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$restoreSelected$96(str, zEncrypted);
+                }
+            });
+        } catch (Exception e) {
+            final String message = e.getMessage() == null ? "تحقق من الملف" : e.getMessage();
+            runOnUiThread(new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$restoreSelected$95(message);
+                }
+            });
+        }
+    }
+
+    public /* synthetic */ void lambda$review$56(String str, JSONObject jSONObject, Spinner spinner, String[] strArr, Spinner spinner2, DialogInterface dialogInterface, int i) {
+        LinkedHashMap<String, ArrayList<ChatText.Message>> linkedHashMap = ChatText.parse(str, jSONObject.optLong("at"), spinner.getSelectedItemPosition() == 1);
+        String str2 = strArr[spinner2.getSelectedItemPosition()];
+        ArrayList<ChatText.Message> arrayList = linkedHashMap.get(str2);
+        if (arrayList == null) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        Iterator<ChatText.Message> it = arrayList.iterator();
+        while (it.hasNext()) {
+            sb.append(it.next().body).append("\n");
+        }
+        Analysis analysisInspect = Analysis.inspect(sb.toString(), jSONObject.optLong("at"));
+        analysisInspect.followUp = "";
+        analysisInspect.followTime = "";
+        for (ChatText.Message message : arrayList) {
+            Analysis analysisInspect2 = Analysis.inspect(message.body, message.at);
+            if (!analysisInspect2.followUp.isEmpty() && (message.dated || message.body.matches("(?s).*20[0-9]{2}-[0-9]{2}-[0-9]{2}.*"))) {
+                analysisInspect.followUp = analysisInspect2.followUp;
+            }
+            if (!analysisInspect2.followTime.isEmpty()) {
+                analysisInspect.followTime = analysisInspect2.followTime;
+            }
+        }
+        String strPhone = Analysis.phone(str2);
+        if (!strPhone.isEmpty()) {
+            analysisInspect.phone = strPhone;
+        }
+        chooseQuick(jSONObject, analysisInspect, str2);
+    }
+
+    public /* synthetic */ void lambda$settings$60() {
+        startActivity(new Intent(this, (Class<?>) LedgerActivity.class));
+    }
+
+    public /* synthetic */ void lambda$settings$61() {
+        startActivity(new Intent(this, (Class<?>) ReportsActivity.class));
+    }
+
+    public /* synthetic */ void lambda$settings$62() {
+        this.tab = "ads";
+        render();
+    }
+
+    public /* synthetic */ void lambda$settings$63() {
+        editProfile(this.business);
+    }
+
+    public /* synthetic */ void lambda$settings$65() {
+        ShortcutManager shortcutManager = (ShortcutManager) getSystemService(ShortcutManager.class);
+        if (shortcutManager.isRequestPinShortcutSupported()) {
+            shortcutManager.requestPinShortcut(new ShortcutInfo.Builder(this, "tawasul-crm").setShortLabel("تواصل").setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher)).setIntent(new Intent(this, (Class<?>) MainActivity.class).setAction("android.intent.action.VIEW")).build(), null);
+        } else {
+            alert("اسحب أيقونة تواصل من قائمة التطبيقات إلى الشاشة الرئيسية.");
+        }
+    }
+
+    public /* synthetic */ void lambda$settings$66(SharedPreferences sharedPreferences, CompoundButton compoundButton, boolean z) {
+        sharedPreferences.edit().putBoolean("reminders", z).apply();
+        if (z) {
+            enableNotifications();
+        } else {
+            ((NotificationManager) getSystemService(NotificationManager.class)).cancelAll();
+            Reminders.schedule(this);
+        }
+    }
+
+    public /* synthetic */ void lambda$settings$67() {
+        String str;
+        if (Reminders.allowed(this)) {
+            Reminders.test(this);
+            str = "أُرسل الإشعار التجريبي؛ افحص شريط الإشعارات.";
+        } else {
+            str = "فعّل إذن الإشعارات أولًا من زر التفعيل";
+        }
+        alert(str);
+    }
+
+    public /* synthetic */ void lambda$settings$68() {
+        startActivity(new Intent("android.settings.APP_NOTIFICATION_SETTINGS").putExtra("android.provider.extra.APP_PACKAGE", getPackageName()));
+    }
+
+    private /* synthetic */ void lambda$settings$71() {
+        RoleManager roleManager = (RoleManager) getSystemService(RoleManager.class);
+        if (roleManager.isRoleAvailable("android.app.role.CALL_SCREENING")) {
+            startActivityForResult(roleManager.createRequestRoleIntent("android.app.role.CALL_SCREENING"), 11);
+        } else {
+            alert("هذا الدور غير متاح على الهاتف");
+        }
+    }
+
+    public /* synthetic */ void lambda$settings$72(DialogInterface dialogInterface, int i) {
+        if (checkSelfPermission("android.permission.READ_CALL_LOG") == 0) {
+            importHistory();
+        } else {
+            requestPermissions(new String[]{"android.permission.READ_CALL_LOG"}, 12);
+        }
+    }
+
+    private /* synthetic */ void lambda$settings$73() {
+        new FluentDialog(this).setMessage("سيُقرأ سجل المكالمات وتُحفظ الأرقام السعودية وأسماؤها محليًا. هل تريد البدء؟").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("استيراد", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$settings$72(dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public /* synthetic */ void lambda$settings$74(DialogInterface dialogInterface, int i) {
+        startActivityForResult(new Intent("android.intent.action.OPEN_DOCUMENT").setType("application/json").addCategory("android.intent.category.OPENABLE"), 21);
+    }
+
+    public /* synthetic */ void lambda$settings$75() {
+        new FluentDialog(this).setMessage("الاستعادة تستبدل العملاء والرسائل والمنشورات وملفات المنشآت في النسخ الجديدة. أنشئ نسخة احتياطية أولًا.").setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("اختيار النسخة", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$settings$74(dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public /* synthetic */ void lambda$syncContactNames$79(boolean z, Map map, int i, Runnable runnable) {
+        String str;
+        this.backgroundOps--;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        render();
+        if (z) {
+            if (i < 0) {
+                str = "تعذر تحديث الأسماء الآن؛ أعد المحاولة بعد قليل";
+            } else if (map.isEmpty()) {
+                str = "لم يعثر التطبيق على جهات اتصال سعودية قابلة للقراءة";
+            } else {
+                str = i > 0 ? "تم حفظ دليل جهات الاتصال وتحديث أسماء " + i + " سجلًا موجودًا" : "تم حفظ دليل جهات الاتصال. لا توجد أرقام مطابقة في الوارد أو العملاء الحاليين بعد.";
+            }
+            alert(str);
+        }
+        if (runnable != null) {
+            runnable.run();
+        }
+    }
+
+    public /* synthetic */ void lambda$syncContactNames$80(final boolean z, final Runnable runnable) {
+        final Map<String, String> mapContacts = PhoneData.contacts(getApplicationContext());
+        int updated;
+        try {
+            this.store.cacheContactNames(mapContacts);
+            updated = this.store.refreshContactNames(mapContacts);
+        } catch (Exception unused) {
+            updated = -1;
+        }
+        final int iRefreshContactNames = updated;
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$syncContactNames$79(z, mapContacts, iRefreshContactNames, runnable);
+            }
+        });
+    }
+
+    public /* synthetic */ void lambda$syncHistory$85(boolean z) {
+        this.backgroundOps--;
+        this.importing = false;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        if (z) {
+            this.tab = "unassigned";
+        }
+        render();
+        if (z) {
+            alert(getSharedPreferences("settings", 0).getString("status", ""));
+        }
+    }
+
+    public /* synthetic */ void lambda$syncHistory$86(final boolean z) {
+        History.run(getApplicationContext());
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$syncHistory$85(z);
+            }
+        });
+    }
+
+    public /* synthetic */ void lambda$templates$107(EditText editText, DialogInterface dialogInterface, int i) {
+        ((ClipboardManager) getSystemService("clipboard")).setPrimaryClip(ClipData.newPlainText("رسالة العميل", editText.getText().toString()));
+    }
+
+    public /* synthetic */ void lambda$templates$108(JSONObject jSONObject, EditText editText, long j, String str, DialogInterface dialogInterface, int i) {
+        String strOptString = jSONObject.optString("phone");
+        if (strOptString.isEmpty() || strOptString.equals("null")) {
+            alert("أضف رقم العميل أو استخدم نسخ النص");
+            return;
+        }
+        try {
+            startActivity(new Intent("android.intent.action.VIEW", Uri.parse("https://wa.me/" + strOptString.replace("+", "") + "?text=" + Uri.encode(editText.getText().toString()))));
+            this.store.event(j, "template", "تجهيز قالب واتساب: " + str + " — لا يؤكد إرسال الرسالة", System.currentTimeMillis(), null);
+        } catch (Exception unused) {
+            alert("تعذر فتح واتساب؛ استخدم نسخ النص");
+        }
+    }
+
+    public /* synthetic */ void lambda$templates$109(String[] strArr, ArrayList arrayList, final JSONObject jSONObject, final long j, DialogInterface dialogInterface, int i) {
+        if (i == strArr.length - 1) {
+            editTemplates();
+            return;
+        }
+        LinearLayout linearLayoutForm = form();
+        final EditText editTextField = field(linearLayoutForm, "راجع النص وعدّله قبل الإرسال", WhatsAppTemplates.fill((String) arrayList.get(i), jSONObject, null), 131073);
+        editTextField.setMinLines(7);
+        muted(linearLayoutForm, "فتح واتساب يجهز النص فقط. تضغط إرسال داخل واتساب بنفسك.");
+        final String str = strArr[i];
+        new FluentDialog(this).setTitle(str).setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setNeutralButton("نسخ النص", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface2, int i2) {
+                MainActivity.this.lambda$templates$107(editTextField, dialogInterface2, i2);
+            }
+        }).setPositiveButton("فتح واتساب", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface2, int i2) {
+                MainActivity.this.lambda$templates$108(jSONObject, editTextField, j, str, dialogInterface2, i2);
+            }
+        }).show();
+    }
+
+    public /* synthetic */ void lambda$timeline$105(EditText editText, long j, AlertDialog[] alertDialogArr) {
+        String strTrim = editText.getText().toString().trim();
+        if (strTrim.isEmpty()) {
+            alert("اكتب الملاحظة أولًا");
+            return;
+        }
+        this.store.event(j, "note", strTrim, System.currentTimeMillis(), null);
+        alertDialogArr[0].dismiss();
+        timeline(j);
+    }
+
+    public /* synthetic */ void lambda$tools$34(JSONObject jSONObject) {
+        startActivity(new Intent(this, (Class<?>) SoftwareActivity.class).putExtra("leadId", jSONObject.optLong("id")));
+    }
+
+    public /* synthetic */ void lambda$tools$35(JSONObject jSONObject) {
+        timeline(jSONObject.optLong("id"));
+    }
+
+    public /* synthetic */ void lambda$tools$36(JSONObject jSONObject) {
+        requestDetails(jSONObject.optLong("id"));
+    }
+
+    public /* synthetic */ void lambda$tools$37(JSONObject jSONObject) {
+        templates(jSONObject.optLong("id"));
+    }
+
+    public /* synthetic */ void lambda$tools$38(AlertDialog alertDialog, JSONObject jSONObject) {
+        alertDialog.dismiss();
+        followAction(jSONObject.optLong("id"), false);
+    }
+
+    public /* synthetic */ void lambda$tools$39(AlertDialog alertDialog, JSONObject jSONObject) {
+        alertDialog.dismiss();
+        followAction(jSONObject.optLong("id"), true);
+    }
+
+    public /* synthetic */ void lambda$writeCsv$91(String str) {
+        this.backgroundOps--;
+        if (isFinishing()) {
+            return;
+        }
+        alert(str);
+    }
+
+    public /* synthetic */ void lambda$writeCsv$92(String str, Uri uri) {
+        String message;
+        byte[] bArrLedger;
+        try {
+            if (str.equals("customers")) {
+                bArrLedger = CsvExport.customers(this.store.query("SELECT * FROM leads WHERE business=? ORDER BY id DESC", "survey"));
+            } else if (str.equals("quotes")) {
+                ArrayList arrayList = new ArrayList();
+                Iterator<JSONObject> it = this.store.query("SELECT * FROM quotes ORDER BY id DESC", new String[0]).iterator();
+                while (it.hasNext()) {
+                    arrayList.add(new JSONObject(it.next().getString("data")));
+                }
+                bArrLedger = CsvExport.quotes(arrayList);
+            } else {
+                bArrLedger = CsvExport.ledger(this.store.query("SELECT * FROM ledgerEntries ORDER BY at DESC,id DESC", new String[0]));
+            }
+            try (OutputStream outputStream = getContentResolver().openOutputStream(uri)) {
+                if (outputStream == null) {
+                    throw new IOException();
+                }
+                outputStream.write(bArrLedger);
+            }
+            message = "تم تصدير CSV بنجاح";
+        } catch (Exception unused) {
+            message = "تعذر تصدير CSV؛ تحقق من المساحة ومكان الحفظ";
+        }
+        final String str2 = message;
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$writeCsv$91(str2);
+            }
+        });
+    }
+
+    public /* synthetic */ void lambda$writeEncryptedBackup$93(String str) {
+        this.backgroundOps--;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        alert(str);
+    }
+
+    public /* synthetic */ void lambda$writeEncryptedBackup$94(char[] cArr, Uri uri) {
+        String message;
+        try {
+            byte[] bArrEncrypt = BackupCipher.encrypt(backupBytes(), cArr);
+            try (OutputStream outputStream = getContentResolver().openOutputStream(uri)) {
+                if (outputStream == null) {
+                    throw new IOException();
+                }
+                outputStream.write(bArrEncrypt);
+            }
+            message = "حُفظت النسخة الاحتياطية المشفرة";
+        } catch (Exception e) {
+            message = "تعذر حفظ النسخة المشفرة: " + (e.getMessage() == null ? "تحقق من الملف والمساحة" : e.getMessage());
+        } finally {
+            Arrays.fill(cArr, (char) 0);
+        }
+        final String str = message;
+        runOnUiThread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$writeEncryptedBackup$93(str);
+            }
+        });
+    }
+
+    private void leadCard(final JSONObject jSONObject) {
+        String str;
+        String str2;
+        int iAccent;
+        int iTint;
+        boolean zEquals = this.tab.equals("unassigned");
+        LinearLayout linearLayoutCard = card(this.content);
+        LinearLayout linearLayoutRow = row();
+        linearLayoutCard.addView(linearLayoutRow);
+        String strOptString = jSONObject.optString("name");
+        final String strOptString2 = jSONObject.optString("phone", "");
+        boolean z = strOptString.isEmpty() || (!strOptString2.isEmpty() && Analysis.phone(strOptString).equals(strOptString2));
+        if (zEquals) {
+            if (z) {
+                str = "رقم وارد";
+                str2 = "Incoming number";
+                strOptString = tr(str, str2);
+            }
+        } else if (z) {
+            str = "عميل غير مسمى";
+            str2 = "Unnamed customer";
+            strOptString = tr(str, str2);
+        }
+        TextView textViewText = text(z ? "?" : strOptString.substring(0, 1), 20);
+        textViewText.setTextColor(-1);
+        textViewText.setGravity(17);
+        textViewText.setPadding(0, 0, 0, 0);
+        textViewText.setBackground(UiTheme.sectionSurface(this, true, 16));
+        linearLayoutRow.addView(textViewText, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setPadding(dp(10), 0, dp(10), 0);
+        linearLayoutRow.addView(linearLayoutColumn, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        linearLayoutColumn.addView(text(strOptString, 17));
+        if (!strOptString2.isEmpty() && !strOptString2.equals("null")) {
+            TextView textViewText2 = text(DisplayNumbers.latin(strOptString2), 12);
+            textViewText2.setTextDirection(3);
+            textViewText2.setTextColor(-10192758);
+            linearLayoutColumn.addView(textViewText2);
+        }
+        if (zEquals) {
+            CheckBox checkBox = new CheckBox(this);
+            checkBox.setContentDescription(tr("تحديد الرقم للاعتماد", "Select number for approval"));
+            checkBox.setChecked(this.selectedCalls.contains(Long.valueOf(jSONObject.optLong("id"))));
+            checkBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public final void onCheckedChanged(CompoundButton compoundButton, boolean z2) {
+                    MainActivity.this.lambda$leadCard$28(jSONObject, compoundButton, z2);
+                }
+            });
+            linearLayoutRow.addView(checkBox, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        }
+        String[] strArrStages = stages(jSONObject.optString("business"), jSONObject.optString("requestType", "sales"));
+        int iMax = Math.max(0, Math.min(5, jSONObject.optInt("stage")));
+        String strTr = zEquals ? tr("بانتظار المراجعة", "Pending review") : strArrStages[iMax];
+        if (iMax == 4) {
+            iAccent = -14125988;
+        } else {
+            iAccent = iMax == 5 ? -6076858 : UiTheme.accent(this);
+        }
+        if (iMax == 4) {
+            iTint = -1575955;
+        } else {
+            iTint = iMax == 5 ? -397586 : SectionColors.tint(UiTheme.section(this));
+        }
+        View viewPill = pill(strTr, iAccent, iTint);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-2, -2);
+        layoutParams.setMargins(0, dp(9), 0, dp(4));
+        linearLayoutCard.addView(viewPill, layoutParams);
+        if (!jSONObject.optString("company").isEmpty()) {
+            muted(linearLayoutCard, jSONObject.optString("company"));
+        }
+        if (!jSONObject.optString("interest").isEmpty()) {
+            muted(linearLayoutCard, jSONObject.optString("interest"));
+        }
+        String strOptString3 = jSONObject.optString("followUp");
+        if (!strOptString3.isEmpty()) {
+            TextView textViewText3 = text(strOptString3 + "  •  " + jSONObject.optString("followTime", "09:00"), 12);
+            textViewText3.setTextDirection(3);
+            textViewText3.setTextColor(strOptString3.compareTo(LocalDate.now().toString()) < 0 ? -6070492 : -10192758);
+            linearLayoutCard.addView(textViewText3);
+        }
+        LinearLayout linearLayoutRow2 = row();
+        linearLayoutCard.addView(linearLayoutRow2);
+        button(linearLayoutRow2, tr("التفاصيل", "Details"), new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$leadCard$29(jSONObject);
+            }
+        }).setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1.0f));
+        if (zEquals) {
+            button(linearLayoutRow2, tr("اعتماد عميل", "Approve customer"), new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$leadCard$30(jSONObject);
+                }
+            }).setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1.0f));
+            return;
+        }
+        if (strOptString2.isEmpty() || strOptString2.equals("null")) {
+            return;
+        }
+        Button button = button(linearLayoutRow2, tr("اتصال", "Call"), new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$leadCard$31(jSONObject, strOptString2);
+            }
+        });
+        LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        layoutParams2.setMargins(dp(5), 0, dp(5), 0);
+        button.setLayoutParams(layoutParams2);
+        button(linearLayoutRow2, tr("واتساب", "WhatsApp"), new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$leadCard$32(strOptString2);
+            }
+        }).setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1.0f));
+    }
+
+    private void messages() {
+        UiTheme.header(this.content, tr("الرسائل والوارد", "Messages & inbox"), "messages");
+        muted(this.content, tr("راجع النصوص التي شاركتها مع التطبيق قبل اعتماد بياناتها.", "Review shared messages before approving their details."));
+        primary(button(this.content, "لصق نص أو محادثة للتحليل", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.pasteText();
+            }
+        }));
+        ArrayList<JSONObject> arrayListQuery = this.store.query("SELECT * FROM messages WHERE state='pending' ORDER BY at DESC LIMIT " + (this.limit + 1), new String[0]);
+        if (arrayListQuery.isEmpty()) {
+            empty("لا توجد رسائل معلّقة", "شارك نص رسالة أو ملف TXT من واتساب إلى عملائي، ثم راجع المعلومات قبل حفظها.");
+        }
+        int i = 0;
+        for (final JSONObject jSONObject : arrayListQuery) {
+            int i2 = i + 1;
+            if (i >= this.limit) {
+                break;
+            }
+            LinearLayout linearLayoutCard = card(this.content);
+            linearLayoutCard.addView(text(jSONObject.optString("sender").isEmpty() ? "نص مشارك" : jSONObject.optString("sender"), 19));
+            linearLayoutCard.addView(text(jSONObject.optString("source") + " • " + ((Object) DateFormat.format("yyyy-MM-dd HH:mm", jSONObject.optLong("at"))), 14));
+            String strOptString = jSONObject.optString("body");
+            if (strOptString.length() > 4000) {
+                strOptString = strOptString.substring(0, 4000) + "\n… نص طويل؛ محفوظ في الأرشيف المحلي";
+            }
+            linearLayoutCard.addView(text(strOptString, 16));
+            button(linearLayoutCard, "تحليل ومراجعة المعلومات", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$messages$51(jSONObject);
+                }
+            });
+            button(linearLayoutCard, "تجاهل هذه الرسالة", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$messages$53(jSONObject);
+                }
+            });
+            i = i2;
+        }
+        if (arrayListQuery.size() > this.limit) {
+            button(this.content, "عرض المزيد", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$messages$54();
+                }
+            });
+        }
+        button(this.content, "عرض أرشيف الرسائل المراجعة", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$messages$55();
+            }
+        });
+    }
+
+    private void metric(LinearLayout linearLayout, String str, int i, int i2) {
+        LinearLayout linearLayoutColumn = column();
+        linearLayoutColumn.setPadding(dp(12), dp(12), dp(12), dp(12));
+        UiTheme.styleCard(linearLayoutColumn);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        layoutParams.setMargins(dp(3), 0, dp(3), 0);
+        linearLayout.addView(linearLayoutColumn, layoutParams);
+        TextView textViewText = text(String.valueOf(i), 24);
+        textViewText.setTextColor(UiTheme.accent(this));
+        linearLayoutColumn.addView(textViewText);
+        muted(linearLayoutColumn, str);
+    }
+
+    private void muted(LinearLayout linearLayout, String str) {
+        TextView textViewText = text(str, 13);
+        textViewText.setTextColor(-10192758);
+        linearLayout.addView(textViewText);
+    }
+
+    public void openCallCsv() {
+        startActivityForResult(new Intent("android.intent.action.OPEN_DOCUMENT").setType("text/*").addCategory("android.intent.category.OPENABLE"), 31);
+    }
+
+    public void openContactVcf() {
+        startActivityForResult(new Intent("android.intent.action.OPEN_DOCUMENT").setType("text/x-vcard").putExtra("android.intent.extra.MIME_TYPES", new String[]{"text/x-vcard", "text/vcard", "text/directory", "text/plain"}).addCategory("android.intent.category.OPENABLE"), 32);
+    }
+
+    public void openPrivacyPolicy() {
+        try {
+            startActivity(new Intent("android.intent.action.VIEW", Uri.parse(BuildConfig.PRIVACY_POLICY_URL)));
+        } catch (Exception unused) {
+            alert("تعذر فتح المتصفح. الرابط: https://soom12034-glitch.github.io/EngineeringCRM/privacy-policy.html");
+        }
+    }
+
+    private int organizationActivityIndex(String str) {
+        int i = 0;
+        while (true) {
+            String[] strArr = ORGANIZATION_ACTIVITIES;
+            if (i >= strArr.length) {
+                return strArr.length - 1;
+            }
+            if (strArr[i].equals(str)) {
+                return i;
+            }
+            i++;
+        }
+    }
+
+    private AlertDialog panel(String str, LinearLayout linearLayout) {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.addView(linearLayout);
+        AlertDialog alertDialogCreate = new FluentDialog(this).setTitle(str).setView(scrollView).setNegativeButton("إغلاق", (DialogInterface.OnClickListener) null).create();
+        alertDialogCreate.show();
+        alertDialogCreate.getWindow().setBackgroundDrawable(shape(-1, 20, 0));
+        alertDialogCreate.getWindow().setLayout(-1, -1);
+        return alertDialogCreate;
+    }
+
+    public void pasteText() {
+        LinearLayout linearLayoutForm = form();
+        final EditText editTextField = field(linearLayoutForm, "الصق نص الرسالة أو المحادثة هنا", "", 131073);
+        editTextField.setMinLines(8);
+        new FluentDialog(this).setTitle("تحليل نص واتساب").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("تحليل", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$pasteText$59(editTextField, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    public void lambda$edit$45(final EditText editText) {
+        LocalDate localDateNow;
+        try {
+            localDateNow = editText.getText().toString().trim().isEmpty() ? LocalDate.now() : LocalDate.parse(editText.getText().toString().trim());
+        } catch (Exception unused) {
+            localDateNow = LocalDate.now();
+        }
+        new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+            @Override
+            public final void onDateSet(DatePicker datePicker, int i, int i2, int i3) {
+                editText.setText(LocalDate.of(i, i2 + 1, i3).toString());
+            }
+        }, localDateNow.getYear(), localDateNow.getMonthValue() - 1, localDateNow.getDayOfMonth()).show();
+    }
+
+    private TextView pill(String str, int i, int i2) {
+        TextView textViewText = text(str, 11);
+        textViewText.setTextColor(i);
+        textViewText.setPadding(dp(10), dp(5), dp(10), dp(5));
+        textViewText.setBackground(shape(i2, 20, 0));
+        return textViewText;
+    }
+
+    private void primary(Button button) {
+        UiTheme.button(button, true);
+    }
+
+    public void privacyPolicy() {
+        LinearLayout linearLayoutForm = form();
+        linearLayoutForm.addView(text("سياسة الخصوصية", 24));
+        linearLayoutForm.addView(text("يعمل تواصل محليًا على جهازك ولا يطلب إذن الإنترنت. لا يرسل بيانات العملاء أو جهات الاتصال أو الرسائل أو النسخ الاحتياطية إلى خوادم المطور.", 15));
+        muted(linearLayoutForm, "الأذونات واستخدامها");
+        linearLayoutForm.addView(text("• جهات الاتصال: اختيارية، وتُستخدم محليًا لمطابقة رقم العميل بالاسم أو تجهيز حفظه في الهاتف.\n• الإشعارات: لتنبيهات المتابعة التي تفعّلها.\n• سجل المكالمات: لا تطلبه نسخة Google Play؛ يوجد فقط في الإصدار المباشر المنفصل خارج المتجر.", 14));
+        muted(linearLayoutForm, "الحفظ والحذف");
+        linearLayoutForm.addView(text("تُحفظ البيانات داخل مساحة التطبيق المعزولة. يمكنك حذف السجلات، أو مسح بيانات التطبيق من إعدادات Android، أو إزالة التطبيق. النسخ الاحتياطية مشفرة بكلمة مرور يحددها المستخدم ولا يستطيع المطور استعادتها.", 14));
+        muted(linearLayoutForm, "الحماية والمشاركة");
+        linearLayoutForm.addView(text("لا توجد حسابات أو إعلانات أو أدوات تحليل أو تتبع. لا تنتقل البيانات إلى تطبيق خارجي إلا عندما تختار أنت المشاركة عبر واتساب أو البريد أو غيرهما.", 14));
+        button(linearLayoutForm, "عرض السياسة الكاملة على الويب", this::openPrivacyPolicy);
+        muted(linearLayoutForm, "آخر تحديث: 8 أكتوبر 2026 • للتواصل: enginex@enginex2030.com");
+        panel("الخصوصية والأمان", linearLayoutForm);
+    }
+
+    private String profileBrand(String str) {
+        JSONObject jSONObjectProfile = this.store.profile(str);
+        return jSONObjectProfile.optString("brand").isEmpty() ? jSONObjectProfile.optString("name") : jSONObjectProfile.optString("brand");
+    }
+
+    private String profileContact(String str) {
+        JSONObject jSONObjectProfile = this.store.profile(str);
+        String strFirstPhone = Profiles.firstPhone(jSONObjectProfile.optString("phones"));
+        return strFirstPhone.isEmpty() ? jSONObjectProfile.optString("whatsapp") : strFirstPhone;
+    }
+
+    private String profileFooter(String str, boolean z) {
+        String strTrim;
+        JSONObject jSONObjectProfile = this.store.profile(str);
+        StringBuilder sb = new StringBuilder();
+        if (z && !profileBrand(str).isEmpty()) {
+            sb.append(profileBrand(str));
+        }
+        JSONObject jSONObjectOptJSONObject = jSONObjectProfile.optJSONObject("advertising");
+        for (String str2 : Profiles.AD_FIELDS) {
+            boolean z2 = str2.equals("address") || str2.equals("phones") || str2.equals("whatsapp") || str2.equals("website");
+            if (jSONObjectOptJSONObject != null) {
+                if (jSONObjectOptJSONObject.optBoolean(str2, z2)) {
+                    strTrim = jSONObjectProfile.optString(str2).trim();
+                    if (!strTrim.isEmpty()) {
+                        if (sb.length() > 0) {
+                            sb.append("\n");
+                        }
+                        sb.append(Profiles.label(str2)).append(": ").append(strTrim);
+                    }
+                }
+            } else if (z2) {
+                strTrim = jSONObjectProfile.optString(str2).trim();
+                if (!strTrim.isEmpty()) {
+                    if (sb.length() > 0) {
+                        sb.append("\n");
+                    }
+                    sb.append(Profiles.label(str2)).append(": ").append(strTrim);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private void quickPanel(final JSONObject jSONObject, JSONObject jSONObject2, final Analysis analysis, String str) {
+        JSONObject jSONObject3;
+        try {
+            final JSONObject jSONObject4 = new JSONObject(jSONObject2.toString());
+            LinearLayout linearLayoutForm = form();
+            linearLayoutForm.addView(text("المعلومات المستخرجة", 22));
+            muted(linearLayoutForm, "مراجعة واحدة بدل تعبئة نموذج العميل. المعلومات الموجودة لا تُستبدل إلا إذا اخترت ذلك.");
+            boolean z = jSONObject4.optLong("id") == 0;
+            String strOptString = analysis.name;
+            if (strOptString.isEmpty() && !analysis.phone.isEmpty()) {
+                strOptString = PhoneData.contact(this, analysis.phone);
+            }
+            if (strOptString.isEmpty() && !str.isEmpty() && Analysis.phone(str).isEmpty()) {
+                strOptString = str;
+            }
+            if (strOptString.isEmpty()) {
+                strOptString = analysis.phone;
+            }
+            if (!z) {
+                strOptString = jSONObject4.optString("name");
+            }
+            EditText editTextField = field(linearLayoutForm, "اسم العميل أو رقمه", strOptString, 1);
+            EditText editTextField2 = field(linearLayoutForm, "الرقم السعودي", z ? analysis.phone : jSONObject4.optString("phone"), 3);
+            editTextField2.setTextDirection(3);
+            int i = 2;
+            String[] strArr = {"غير محدد", "أجهزة المساحة", "البرامج والتطبيقات"};
+            if ("survey".equals("survey")) {
+                i = 1;
+            } else if (!"survey".equals("software")) {
+                i = 0;
+            }
+            final Spinner spinner = spinner(linearLayoutForm, "النشاط المقترح", strArr, i);
+            spinner.setEnabled(false);
+            final LinkedHashMap linkedHashMap = new LinkedHashMap();
+            linkedHashMap.put("company", analysis.company);
+            linkedHashMap.put("email", analysis.email);
+            linkedHashMap.put("interest", analysis.interest);
+            linkedHashMap.put("followUp", analysis.followUp);
+            linkedHashMap.put("followTime", analysis.followTime);
+            HashMap map = new HashMap();
+            boolean z2 = z;
+            map.put("company", "الشركة");
+            map.put("email", "البريد");
+            map.put("interest", "الاهتمام");
+            map.put("followUp", "المتابعة");
+            map.put("followTime", "الوقت");
+            EditText editText = editTextField2;
+            final LinkedHashMap linkedHashMap2 = new LinkedHashMap();
+            Iterator it = linkedHashMap.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry entry = (Map.Entry) it.next();
+                if (!((String) entry.getValue()).isEmpty()) {
+                    CheckBox checkBox = new CheckBox(this);
+                    Iterator it2 = it;
+                    String strOptString2 = jSONObject4.optString((String) entry.getKey());
+                    EditText editText2 = editText;
+                    EditText editText3 = editTextField;
+                    checkBox.setText(((String) map.get(entry.getKey())) + ": " + ((String) entry.getValue()) + (strOptString2.isEmpty() ? "" : "\nالمحفوظ: " + strOptString2));
+                    checkBox.setChecked((z2 || strOptString2.isEmpty()) && (!((String) entry.getKey()).equals("followUp") || ((String) entry.getValue()).compareTo(LocalDate.now().toString()) >= 0));
+                    linearLayoutForm.addView(checkBox);
+                    linkedHashMap2.put((String) entry.getKey(), checkBox);
+                    it = it2;
+                    editText = editText2;
+                    editTextField = editText3;
+                }
+            }
+            final EditText editText4 = editText;
+            final EditText editText5 = editTextField;
+            try {
+                jSONObject3 = new JSONObject(jSONObject4.optString("requestDetails", "{}"));
+            } catch (Exception unused) {
+                jSONObject3 = new JSONObject();
+            }
+            final LinkedHashMap linkedHashMap3 = new LinkedHashMap();
+            if (!analysis.details.isEmpty()) {
+                linearLayoutForm.addView(text("اقتراحات تفاصيل الطلب", 19));
+                for (Map.Entry<String, String> entry2 : analysis.details.entrySet()) {
+                    CheckBox checkBox2 = new CheckBox(this);
+                    checkBox2.setText(requestLabel(entry2.getKey()) + ": " + entry2.getValue());
+                    JSONObject jSONObjectOptJSONObject = jSONObject3.optJSONObject("survey");
+                    checkBox2.setChecked(jSONObjectOptJSONObject == null || jSONObjectOptJSONObject.optString(entry2.getKey()).isEmpty());
+                    linearLayoutForm.addView(checkBox2);
+                    linkedHashMap3.put(entry2.getKey(), checkBox2);
+                }
+            }
+            final JSONObject jSONObject5 = jSONObject3;
+            final AlertDialog[] alertDialogArr = new AlertDialog[1];
+            primary(button(linearLayoutForm, "اعتماد المعلومات وحفظ العميل", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$quickPanel$58(editText4, editText5, jSONObject4, spinner, linkedHashMap2, linkedHashMap, jSONObject5, linkedHashMap3, analysis, jSONObject, alertDialogArr);
+                }
+            }));
+            alertDialogArr[0] = panel("اعتماد المعلومات", linearLayoutForm);
+        } catch (Exception unused2) {
+            alert("تعذر قراءة العميل");
+        }
+    }
+
+    private String read(Uri uri, int i) throws Exception {
+        if (!"content".equals(uri.getScheme())) {
+            throw new IllegalArgumentException("اختر ملفًا من مدير المستندات");
+        }
+        InputStream inputStreamOpenInputStream = getContentResolver().openInputStream(uri);
+        try {
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            try {
+                if (inputStreamOpenInputStream == null) {
+                    throw new IOException();
+                }
+                byte[] bArr = new byte[4096];
+                do {
+                    int i2 = inputStreamOpenInputStream.read(bArr);
+                    if (i2 == -1) {
+                        String strDecode = TextDecoder.decode(byteArrayOutputStream.toByteArray());
+                        byteArrayOutputStream.close();
+                        if (inputStreamOpenInputStream != null) {
+                            inputStreamOpenInputStream.close();
+                        }
+                        return strDecode;
+                    }
+                    byteArrayOutputStream.write(bArr, 0, i2);
+                } while (byteArrayOutputStream.size() <= i);
+                throw new IllegalArgumentException("الملف أكبر من الحد المسموح");
+            } catch (Throwable th) {
+                try {
+                    byteArrayOutputStream.close();
+                } catch (Throwable th2) {
+                    th.addSuppressed(th2);
+                }
+                throw th;
+            }
+        } catch (Throwable th3) {
+            if (inputStreamOpenInputStream != null) {
+                try {
+                    inputStreamOpenInputStream.close();
+                } catch (Throwable th4) {
+                    th3.addSuppressed(th4);
+                }
+            }
+            throw th3;
+        }
+    }
+
+    private void receive(Intent intent) {
+        long longExtra = intent.getLongExtra("openLead", 0L);
+        if (longExtra > 0) {
+            JSONObject jSONObjectLead = this.store.lead(longExtra);
+            if (jSONObjectLead.optLong("id") > 0) {
+                this.business = "survey";
+                this.requestFilter = 0;
+                this.tab = "today";
+                render();
+                edit(jSONObjectLead, 0L);
+            }
+            intent.removeExtra("openLead");
+        }
+        if ("android.intent.action.SEND".equals(intent.getAction())) {
+            intent.setAction("android.intent.action.VIEW");
+            String stringExtra = intent.getStringExtra("android.intent.extra.TEXT");
+            final String stringExtra2 = intent.getStringExtra("android.intent.extra.SUBJECT");
+            final Uri uri = (Uri) intent.getParcelableExtra("android.intent.extra.STREAM");
+            if (uri == null) {
+                saveShared(stringExtra, stringExtra2);
+            } else {
+                this.backgroundOps++;
+                new Thread(new Runnable() {
+                    @Override
+                    public final void run() {
+                        MainActivity.this.lambda$receive$103(uri, stringExtra2);
+                    }
+                }, "shared-read").start();
+            }
+        }
+    }
+
+    public void render() {
+        getWindow().setStatusBarColor(-788486);
+        getWindow().setNavigationBarColor(-1);
+        getWindow().getDecorView().setSystemUiVisibility(8208);
+        LinearLayout linearLayoutColumn = column();
+        this.root = linearLayoutColumn;
+        linearLayoutColumn.setLayoutDirection(AppLanguage.direction(this));
+        this.root.setBackgroundColor(-788486);
+        this.root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public final WindowInsets onApplyWindowInsets(View view, WindowInsets windowInsets) {
+                return MainActivity.lambda$render$1(view, windowInsets);
+            }
+        });
+        setContentView(this.root);
+        LinearLayout linearLayoutRow = row();
+        linearLayoutRow.setPadding(dp(20), dp(10), dp(20), dp(8));
+        this.root.addView(linearLayoutRow);
+        linearLayoutRow.addView(new GlassIcon(this, "brand"), new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout linearLayoutColumn2 = column();
+        linearLayoutColumn2.setPadding(dp(10), 0, dp(8), 0);
+        linearLayoutRow.addView(linearLayoutColumn2, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        TextView textViewText = text(tr("تواصل", "Tawasul"), 22);
+        textViewText.setTextColor(-15717821);
+        textViewText.setSingleLine(true);
+        linearLayoutColumn2.addView(textViewText);
+        TextView textViewText2 = text(tr("إدارة العملاء", "CRM workspace"), 11);
+        textViewText2.setTextColor(-10192758);
+        textViewText2.setSingleLine(true);
+        linearLayoutColumn2.addView(textViewText2);
+        linearLayoutRow.addView(pill(tr("خاص وآمن", "Secure"), -15763858, -1574667));
+        TextView textViewPill = pill("AR | EN", -15717821, -1577224);
+        textViewPill.setContentDescription(tr("تغيير اللغة", "Change language"));
+        textViewPill.setPadding(dp(7), dp(5), dp(7), dp(5));
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-2, -2);
+        layoutParams.setMargins(dp(5), 0, 0, 0);
+        linearLayoutRow.addView(textViewPill, layoutParams);
+        textViewPill.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public final void onClick(View view) {
+                MainActivity.this.lambda$render$2(view);
+            }
+        });
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.setClipToPadding(false);
+        scrollView.setVerticalScrollBarEnabled(false);
+        LinearLayout linearLayoutColumn3 = column();
+        this.content = linearLayoutColumn3;
+        linearLayoutColumn3.setPadding(dp(20), dp(4), dp(20), dp(20));
+        scrollView.addView(this.content);
+        this.root.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1.0f));
+        try {
+            if (this.tab.equals("home")) {
+                home();
+            } else if (this.tab.equals("messages")) {
+                messages();
+            } else if (this.tab.equals("settings")) {
+                settings();
+            } else if (this.tab.equals("ads")) {
+                advertising();
+            } else {
+                clients();
+            }
+        } catch (Exception unused) {
+            empty("تعذر عرض البيانات", "أعد فتح التطبيق وتحقق من مساحة الهاتف.");
+        }
+        LinearLayout linearLayoutRow2 = row();
+        linearLayoutRow2.setPadding(dp(6), dp(8), dp(6), dp(4));
+        linearLayoutRow2.setBackground(UiTheme.surface(this, false, 22));
+        this.root.addView(linearLayoutRow2);
+        String[][] strArr = {new String[]{"home", tr("الرئيسية", "Home")}, new String[]{"clients", tr("العملاء", "Customers")}, new String[]{"today", tr("المتابعات", "Follow-ups")}, new String[]{"unassigned", tr("الوارد", "Inbox")}, new String[]{"messages", tr("الرسائل", "Messages")}, new String[]{"settings", tr("الإعدادات", "Settings")}};
+        int i = 0;
+        for (int i2 = 6; i < i2; i2 = 6) {
+            final String[] strArr2 = strArr[i];
+            boolean zEquals = this.tab.equals(strArr2[0]);
+            LinearLayout linearLayoutColumn4 = column();
+            linearLayoutColumn4.setGravity(17);
+            linearLayoutColumn4.setPadding(0, dp(5), 0, dp(5));
+            if (zEquals) {
+                linearLayoutColumn4.setBackground(shape(-1575950, 14, 0));
+            }
+            linearLayoutRow2.addView(linearLayoutColumn4, new LinearLayout.LayoutParams(0, dp(64), 1.0f));
+            linearLayoutColumn4.addView(new Glyph(this, strArr2[0], zEquals ? -15434365 : -10192758), new LinearLayout.LayoutParams(dp(23), dp(23)));
+            TextView textViewText3 = text(strArr2[1], 10);
+            textViewText3.setTextColor(zEquals ? -15434365 : -10192758);
+            textViewText3.setGravity(17);
+            linearLayoutColumn4.addView(textViewText3);
+            linearLayoutColumn4.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public final void onClick(View view) {
+                    MainActivity.this.lambda$render$3(strArr2, view);
+                }
+            });
+            i++;
+        }
+    }
+
+    private void requestCallPermissions() {
+        openCallCsv();
+    }
+
+    public void requestContactNames() {
+        if (checkSelfPermission("android.permission.READ_CONTACTS") != 0) {
+            contactDisclosure(10, null);
+        } else {
+            syncContactNames(true, null);
+        }
+    }
+
+    private void requestDetails(final long j) {
+        JSONObject jSONObject;
+        int i;
+        JSONObject jSONObjectLead = this.store.lead(j);
+        final String strOptString = jSONObjectLead.optString("business");
+        if (strOptString.isEmpty()) {
+            alert("حدد نشاط العميل واحفظه أولًا");
+            return;
+        }
+        try {
+            jSONObject = new JSONObject(jSONObjectLead.optString("requestDetails", "{}"));
+        } catch (Exception unused) {
+            jSONObject = new JSONObject();
+        }
+        final JSONObject jSONObject2 = jSONObject;
+        JSONObject existingDetails = jSONObject2.optJSONObject(strOptString);
+        final JSONObject jSONObjectOptJSONObject = existingDetails == null ? new JSONObject() : existingDetails;
+        int i2 = 1;
+        String[][] strArrFields = strOptString.equals("survey") ? SurveyRequests.fields(jSONObjectLead.optString("requestType", "sales")) : new String[][]{new String[]{"program", "البرنامج المطلوب"}, new String[]{"platform", "سحابي / مكتبي / تطبيق"}, new String[]{"needs", "احتياجات العميل"}, new String[]{"demoDate", "موعد العرض التجريبي (YYYY-MM-DD)"}, new String[]{"plan", "الباقة المطلوبة"}, new String[]{"budget", "الميزانية المتوقعة (ريال)"}, new String[]{"subscriptionEnd", "انتهاء الاشتراك (YYYY-MM-DD)"}};
+        LinearLayout linearLayoutForm = form();
+        linearLayoutForm.addView(text(strOptString.equals("survey") ? "طلب أجهزة المساحة" : "طلب البرامج والتطبيقات", 22));
+        muted(linearLayoutForm, "تفاصيل خاصة بالنشاط المحفوظ لهذا العميل");
+        if (strOptString.equals("survey")) {
+            muted(linearLayoutForm, "نوع الطلب الحالي: " + SurveyRequests.label(jSONObjectLead.optString("requestType", "sales")) + " • عدله من بيانات العميل");
+        }
+        final LinkedHashMap linkedHashMap = new LinkedHashMap();
+        int length = strArrFields.length;
+        int i3 = 0;
+        while (i3 < length) {
+            String[] strArr = strArrFields[i3];
+            if (strArr[0].equals("quantity")) {
+                i = 2;
+            } else if (strArr[0].equals("budget")) {
+                i = 8194;
+            } else {
+                i = (strArr[0].equals("issue") || strArr[0].equals("workDone")) ? 131073 : i2;
+            }
+            String str = strArr[0];
+            linkedHashMap.put(str, field(linearLayoutForm, strArr[i2], jSONObjectOptJSONObject.optString(str), i));
+            i3++;
+            i2 = 1;
+        }
+        final AlertDialog[] alertDialogArr = new AlertDialog[i2];
+        final String[][] strArr2 = strArrFields;
+        primary(button(linearLayoutForm, "حفظ تفاصيل الطلب", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$requestDetails$106(jSONObjectOptJSONObject, strArr2, linkedHashMap, jSONObject2, strOptString, j, alertDialogArr);
+            }
+        }));
+        alertDialogArr[0] = panel("تفاصيل الطلب", linearLayoutForm);
+    }
+
+    private String requestLabel(String str) {
+        String[] strArr = {"device", "model", "service", "condition", "quantity", "budget", "program", "platform", "needs", "plan", "purchaseDate", "calibrationDate", "demoDate", "subscriptionEnd"};
+        String[] strArr2 = {"الجهاز", "الموديل", "الخدمة", "الحالة", "الكمية", "الميزانية", "البرنامج", "المنصة", "الاحتياجات", "الباقة", "موعد الشراء", "تجديد المعايرة", "العرض التجريبي", "انتهاء الاشتراك"};
+        for (int i = 0; i < 14; i++) {
+            if (strArr[i].equals(str)) {
+                return strArr2[i];
+            }
+        }
+        return str;
+    }
+
+    private void restoreDocument(final String str, final char[] cArr) {
+        this.backgroundOps++;
+        new Thread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$restoreDocument$101(cArr, str);
+            }
+        }, "encrypted-restore").start();
+    }
+
+    private void restoreSelected(final Uri uri) {
+        this.backgroundOps++;
+        new Thread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$restoreSelected$97(uri);
+            }
+        }, "restore-read").start();
+    }
+
+    public void lambda$messages$51(final JSONObject jSONObject) {
+        final String strOptString = jSONObject.optString("body");
+        LinkedHashMap<String, ArrayList<ChatText.Message>> linkedHashMap = ChatText.parse(strOptString, jSONObject.optLong("at"), false);
+        if (linkedHashMap.isEmpty()) {
+            chooseQuick(jSONObject, Analysis.inspect(strOptString, jSONObject.optLong("at")), "");
+            return;
+        }
+        LinearLayout linearLayoutForm = form();
+        muted(linearLayoutForm, "اختر مرسل رسائل العميل حتى لا تُخلط رسائلك أو رسائل المجموعة بمعلوماته. لا تعتمد على عنوان الملف لتحديد الهوية.");
+        final String[] strArr = (String[]) linkedHashMap.keySet().toArray(new String[0]);
+        final Spinner spinner = spinner(linearLayoutForm, "صاحب الرسائل المطلوب تحليلها", strArr, 0);
+        final Spinner spinner2 = spinner(linearLayoutForm, "صيغة تاريخ ملف واتساب", new String[]{"يوم / شهر / سنة", "شهر / يوم / سنة"}, 0);
+        new FluentDialog(this).setTitle("تحليل محادثة مصدّرة").setView(linearLayoutForm).setNegativeButton("إلغاء", (DialogInterface.OnClickListener) null).setPositiveButton("استخراج المعلومات", new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i) {
+                MainActivity.this.lambda$review$56(strOptString, jSONObject, spinner2, strArr, spinner, dialogInterface, i);
+            }
+        }).show();
+    }
+
+    private LinearLayout row() {
+        LinearLayout linearLayout = new LinearLayout(this);
+        linearLayout.setOrientation(0);
+        linearLayout.setGravity(16);
+        return linearLayout;
+    }
+
+    public void lambda$tools$33(JSONObject jSONObject) {
+        String str;
+        String strPhone = Analysis.phone(jSONObject.optString("phone"));
+        if (strPhone.isEmpty()) {
+            str = "أضف رقم هاتف صحيحًا للعميل أولًا";
+        } else {
+            Boolean boolExists = PhoneData.exists(this, strPhone);
+            if (!Boolean.TRUE.equals(boolExists)) {
+                try {
+                    startActivity(new Intent(boolExists == null ? "android.intent.action.INSERT_OR_EDIT" : "android.intent.action.INSERT").setType(boolExists == null ? "vnd.android.cursor.item/contact" : "vnd.android.cursor.dir/contact").putExtra("name", jSONObject.optString("name")).putExtra("phone", strPhone).putExtra("phone_type", strPhone.startsWith("+9665") ? 2 : 3).putExtra("company", jSONObject.optString("company")).putExtra("email", jSONObject.optString("email")));
+                    return;
+                } catch (Exception unused) {
+                    alert("تعذر فتح شاشة جهات الاتصال على الهاتف");
+                    return;
+                }
+            }
+            str = "هذا الرقم موجود بالفعل في جهات اتصال الهاتف";
+        }
+        alert(str);
+    }
+
+    private void saveShared(String str, String str2) {
+        String str3;
+        if (str == null || str.trim().isEmpty()) {
+            str3 = "شارك نص رسالة أو ملف محادثة نصيًا دون الوسائط";
+        } else {
+            if (str.length() <= 100000) {
+                if (str2 == null) {
+                    str2 = "";
+                }
+                saveSharedText(str, str2);
+                return;
+            }
+            str3 = "المحادثة طويلة جدًا؛ شارك جزءًا أصغر (حتى 100 ألف حرف)";
+        }
+        alert(str3);
+    }
+
+    private void saveSharedText(String str, String str2) {
+        String strOf = TextFingerprint.of("share|" + str2 + "|" + str.trim());
+        this.store.message(strOf, str2, str, System.currentTimeMillis(), "نص واتساب مشترك", true);
+        ArrayList<JSONObject> arrayListQuery = this.store.query("SELECT * FROM messages WHERE fingerprint=?", strOf);
+        this.tab = "messages";
+        render();
+        if (arrayListQuery.isEmpty() || !arrayListQuery.get(0).optString("state").equals("pending")) {
+            alert("هذا النص سبق حفظه ومراجعته");
+        } else {
+            lambda$messages$51(arrayListQuery.get(0));
+        }
+    }
+
+    private void settings() {
+        UiTheme.header(this.content, tr("الإعدادات", "Settings"), "settings");
+        button(this.content, tr("اللغة: العربية", "Language: English"), new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.chooseLanguage();
+            }
+        });
+        primary(button(this.content, "الدفاتر والعهد والمصروفات", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$60();
+            }
+        }));
+        button(this.content, "التقارير والإحصاءات", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$61();
+            }
+        });
+        button(this.content, "تصدير البيانات CSV", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.chooseCsvExport();
+            }
+        });
+        button(this.content, "إدارة المحتوى التسويقي", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$62();
+            }
+        });
+        primary(button(this.content, "بيانات المنشأة ونوع نشاطها", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$63();
+            }
+        }));
+        LinearLayout linearLayout = this.content;
+        LinearLayout linearLayoutCard = card(linearLayout);
+        this.content = linearLayoutCard;
+        muted(linearLayoutCard, "عام وخصوصية");
+        this.content.addView(text("بياناتك محفوظة على الهاتف. هذا التطبيق مستقل؛ لا يحتاج موقعًا أو اشتراك API، ولا يرسل العملاء أو الرسائل إلى الإنترنت.", 16));
+        final SharedPreferences sharedPreferences = getSharedPreferences("settings", 0);
+        Switch r5 = new Switch(this);
+        r5.setText(tr("أصوات تفاعل خفيفة (اختيارية)", "Subtle interaction sounds (optional)"));
+        r5.setChecked(sharedPreferences.getBoolean("interactionSounds", false));
+        r5.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public final void onCheckedChanged(CompoundButton compoundButton, boolean z) {
+                sharedPreferences.edit().putBoolean("interactionSounds", z).apply();
+            }
+        });
+        this.content.addView(r5);
+        Switch secure = new Switch(this);
+        secure.setText("منع لقطات الشاشة والمعاينة في التطبيقات الأخيرة");
+        secure.setChecked(sharedPreferences.getBoolean("secureScreen", false));
+        secure.setOnCheckedChangeListener((compoundButton, on) -> {
+            sharedPreferences.edit().putBoolean("secureScreen", on).apply();
+            if (on) {
+                getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            } else {
+                getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            }
+        });
+        this.content.addView(secure);
+        Switch lock = new Switch(this);
+        lock.setText("طلب قفل الهاتف عند فتح التطبيق");
+        lock.setChecked(sharedPreferences.getBoolean("appLock", false));
+        lock.setOnCheckedChangeListener((compoundButton, on) -> {
+            if (on && !getSystemService(android.app.KeyguardManager.class).isDeviceSecure()) {
+                compoundButton.setChecked(false);
+                alert("فعّل رمز قفل أو بصمة للهاتف أولًا، ثم أعد المحاولة.");
+                return;
+            }
+            sharedPreferences.edit().putBoolean("appLock", on).apply();
+            markUnlocked();
+        });
+        this.content.addView(lock);
+        button(this.content, "إضافة اختصار للشاشة الرئيسية", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$65();
+            }
+        });
+        button(this.content, "تحديث الأسماء من جهات الاتصال", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.requestContactNames();
+            }
+        });
+        button(this.content, "استيراد دليل جهات الاتصال من ملف VCF", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.openContactVcf();
+            }
+        });
+        button(this.content, "سياسة الخصوصية داخل التطبيق", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.privacyPolicy();
+            }
+        });
+        button(this.content, "فتح سياسة الخصوصية على الويب", this::openPrivacyPolicy);
+        LinearLayout linearLayoutCard2 = card(linearLayout);
+        this.content = linearLayoutCard2;
+        linearLayoutCard2.addView(text("تنبيهات المتابعة", 18));
+        final SharedPreferences sharedPreferences2 = getSharedPreferences("settings", 0);
+        Switch r2 = new Switch(this);
+        r2.setText("تفعيل تذكيرات المتابعة");
+        r2.setChecked(sharedPreferences2.getBoolean("reminders", true));
+        r2.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public final void onCheckedChanged(CompoundButton compoundButton, boolean z) {
+                MainActivity.this.lambda$settings$66(sharedPreferences2, compoundButton, z);
+            }
+        });
+        this.content.addView(r2);
+        primary(button(this.content, "تفعيل إشعارات المتابعة", this::enableNotifications));
+        button(this.content, "إرسال إشعار تجريبي", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$67();
+            }
+        });
+        button(this.content, "إعدادات إشعارات التطبيق", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$68();
+            }
+        });
+        muted(this.content, Reminders.allowed(this) ? "إشعارات التطبيق مسموحة" : "الإشعارات غير مسموحة حاليًا — امنح الإذن لإظهار التذكير");
+        muted(this.content, "حدد تاريخ المتابعة ووقت التنبيه في بيانات العميل لأي نوع طلب. التذكير تقريبي وقد يتأخر مع توفير الطاقة؛ لا تُنبه الطلبات المكتملة أو المغلقة.");
+        LinearLayout linearLayoutCard3 = card(linearLayout);
+        this.content = linearLayoutCard3;
+        linearLayoutCard3.addView(text("المكالمات وجهات الاتصال", 18));
+        muted(this.content, "استورد ملف CSV صادرًا من تطبيق الهاتف أو أداة النسخ الاحتياطي. تُدمج الأرقام المتكررة وتُقبل العناوين العربية والإنجليزية والفواصل المختلفة.");
+        primary(button(this.content, "اختيار ملف سجل المكالمات CSV", this::chooseCallCsv));
+        muted(this.content, "هذه نسخة المتجر: لا تطلب إذن سجل المكالمات المقيد، بما يتوافق مع سياسة Google Play.");
+        LinearLayout linearLayoutCard4 = card(linearLayout);
+        this.content = linearLayoutCard4;
+        linearLayoutCard4.addView(text("رسائل واتساب", 18));
+        this.content.addView(text("واتساب: المشاركة اليدوية فقط. لا يطلب هذا الإصدار الوصول إلى الإشعارات ولا يقرأها في الخلفية. شارك نص الرسالة أو ملف TXT إلى عملائي ثم راجع المعلومات قبل الحفظ.", 16));
+        LinearLayout linearLayoutCard5 = card(linearLayout);
+        this.content = linearLayoutCard5;
+        linearLayoutCard5.addView(text("النسخ الاحتياطي", 18));
+        primary(button(this.content, "إنشاء نسخة احتياطية مشفرة", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.chooseBackupPassword();
+            }
+        }));
+        button(this.content, "استعادة نسخة احتياطية", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$settings$75();
+            }
+        });
+        this.content.addView(text("النسخ الجديدة محمية بكلمة مرور وتشفير AES‑256‑GCM. لا يمكن استعادة كلمة المرور إذا فُقدت.", 14));
+        this.content = linearLayout;
+        linearLayout.addView(text(sharedPreferences.getString("status", ""), 16));
+        this.content.addView(text("التحليل محلي بالكلمات والصيغ: اقتراح اهتمام ونشاط وموعد وبريد ورقم. ليس تحليلًا سحابيًا بالذكاء الاصطناعي. البحث الخارجي عن معلومات الأرقام غير مفعل.", 14));
+    }
+
+    private GradientDrawable shape(int i, int i2, int i3) {
+        GradientDrawable gradientDrawable = new GradientDrawable();
+        gradientDrawable.setColor(i);
+        gradientDrawable.setCornerRadius(dp(i2));
+        if (i3 != 0) {
+            gradientDrawable.setStroke(dp(1), i3);
+        }
+        return gradientDrawable;
+    }
+
+    public void lambda$advertising$113(JSONObject jSONObject) {
+        startActivity(new Intent(this, (Class<?>) PostSharingActivity.class).putExtra("postId", jSONObject.optLong("id")));
+    }
+
+    private void showPostImage(LinearLayout linearLayout, String str) {
+        if (str.isEmpty()) {
+            return;
+        }
+        Bitmap bitmapThumbnail = PostMedia.thumbnail(this, str);
+        if (bitmapThumbnail == null) {
+            muted(linearLayout, "الصورة غير متاحة؛ أعد إضافتها");
+            return;
+        }
+        ImageView imageView = new ImageView(this);
+        imageView.setImageBitmap(bitmapThumbnail);
+        imageView.setAdjustViewBounds(true);
+        imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        imageView.setContentDescription("صورة المنشور");
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, dp(180));
+        layoutParams.setMargins(0, dp(12), 0, dp(8));
+        imageView.setBackground(UiTheme.surface(this, false, 16));
+        linearLayout.addView(imageView, layoutParams);
+    }
+
+    private Spinner spinner(LinearLayout linearLayout, String str, String[] strArr, int i) {
+        muted(linearLayout, str);
+        Spinner spinner = new Spinner(this);
+        spinner.setPadding(dp(12), dp(6), dp(12), dp(6));
+        spinner.setBackground(shape(-788486, 12, -2299923));
+        spinner.setAdapter((SpinnerAdapter) new ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, strArr));
+        spinner.setSelection(i);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, dp(52));
+        layoutParams.setMargins(0, 0, 0, dp(12));
+        linearLayout.addView(spinner, layoutParams);
+        return spinner;
+    }
+
+    private String[] stages(String str) {
+        return SurveyRequests.stages(str, "sales");
+    }
+
+    private String[] stages(String str, String str2) {
+        return SurveyRequests.stages(str, str2);
+    }
+
+    private GradientDrawable surface(int i) {
+        return shape(i, 20, 0);
+    }
+
+    private void switchLanguage() {
+        AppLanguage.set(this, !AppLanguage.english(this));
+        Intent intent = new Intent(this, (Class<?>) MainActivity.class);
+        intent.addFlags(268468224);
+        startActivity(intent);
+        finish();
+    }
+
+    private void syncContactNames(final boolean z, final Runnable runnable) {
+        this.backgroundOps++;
+        new Thread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$syncContactNames$80(z, runnable);
+            }
+        }, "contact-name-sync").start();
+    }
+
+    private void syncHistory(final boolean z) {
+        if (this.importing) {
+            return;
+        }
+        this.importing = true;
+        getSharedPreferences("settings", 0).edit().putLong("lastSync", System.currentTimeMillis()).apply();
+        History.status(this, "جارٍ إنشاء العملاء من سجل المكالمات…");
+        this.backgroundOps++;
+        new Thread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$syncHistory$86(z);
+            }
+        }, "history").start();
+    }
+
+    private void templates(final long j) {
+        final JSONObject jSONObjectLead = this.store.lead(j);
+        String strOptString = jSONObjectLead.optString("interest");
+        if (strOptString.isEmpty()) {
+            strOptString = jSONObjectLead.optString("business").equals("software") ? "البرنامج المطلوب" : "الجهاز أو الخدمة المطلوبة";
+        }
+        String str = "السلام عليكم " + jSONObjectLead.optString("name") + "،\n";
+        String[] strArr = (!jSONObjectLead.optString("business").equals("survey") || jSONObjectLead.optString("requestType", "sales").equals("sales")) ? new String[]{"متابعة الاهتمام", "متابعة عرض السعر", "تأكيد موعد", "متابعة بعد البيع"} : new String[]{"متابعة طلب الخدمة", "متابعة تفاصيل الطلب", "تأكيد موعد", "متابعة بعد إتمام الخدمة"};
+        String[] strArr2 = new String[4];
+        strArr2[0] = str + "يسعدنا متابعة طلبك بخصوص " + strOptString + ". هل توجد تفاصيل إضافية أو استفسارات يمكننا مساعدتك بها؟";
+        strArr2[1] = str + "نود متابعة عرض السعر الخاص بـ " + strOptString + ". هل اطلعت عليه، وهل ترغب في توضيح أي بند؟";
+        strArr2[2] = str + "نود تأكيد موعد المتابعة " + (jSONObjectLead.optString("followUp").isEmpty() ? "[اكتب التاريخ والوقت]" : jSONObjectLead.optString("followUp") + " " + jSONObjectLead.optString("followTime", "09:00")) + " بخصوص " + strOptString + ". هل الموعد مناسب لك؟";
+        strArr2[3] = str + "نتمنى أن تكون تجربتك مع " + strOptString + " جيدة. هل تحتاج أي مساعدة أو متابعة إضافية؟";
+        if (jSONObjectLead.optString("business").equals("survey") && !jSONObjectLead.optString("requestType", "sales").equals("sales")) {
+            strArr2[1] = str + "نتابع طلب " + SurveyRequests.label(jSONObjectLead.optString("requestType")) + " بخصوص " + strOptString + ". هل توجد تفاصيل إضافية عن الجهاز أو المشكلة؟";
+        }
+        ArrayList arrayList = new ArrayList();
+        final ArrayList arrayList2 = new ArrayList();
+        for (int i = 0; i < strArr.length; i++) {
+            arrayList.add(strArr[i]);
+            arrayList2.add(strArr2[i]);
+        }
+        JSONArray jSONArrayCustom = TemplateStore.custom(this.store.profile("survey"));
+        for (int i2 = 0; i2 < jSONArrayCustom.length(); i2++) {
+            JSONObject jSONObjectOptJSONObject = jSONArrayCustom.optJSONObject(i2);
+            if (jSONObjectOptJSONObject != null) {
+                arrayList.add(jSONObjectOptJSONObject.optString("title", "قالب مخصص"));
+                arrayList2.add(jSONObjectOptJSONObject.optString("body"));
+            }
+        }
+        int size = arrayList.size();
+        final String[] strArr3 = new String[size + 1];
+        for (int i3 = 0; i3 < arrayList.size(); i3++) {
+            strArr3[i3] = (String) arrayList.get(i3);
+        }
+        strArr3[size] = "إدارة القوالب المخصصة";
+        new FluentDialog(this).setTitle("اختر قالب رسالة").setItems(strArr3, new DialogInterface.OnClickListener() {
+            @Override
+            public final void onClick(DialogInterface dialogInterface, int i4) {
+                MainActivity.this.lambda$templates$109(strArr3, arrayList2, jSONObjectLead, j, dialogInterface, i4);
+            }
+        }).show();
+    }
+
+    private TextView text(String str, int i) {
+        TextView textView = new TextView(this);
+        textView.setText(str);
+        textView.setTextSize(i);
+        textView.setTextColor(-15189940);
+        textView.setTypeface(this.cairo);
+        textView.setFontVariationSettings("'wght' " + (i >= 19 ? 650 : 450));
+        textView.setFontFeatureSettings("kern");
+        textView.setGravity(8388611);
+        textView.setPadding(0, dp(4), 0, dp(4));
+        return textView;
+    }
+
+    private void timeline(final long j) {
+        JSONObject jSONObjectLead = this.store.lead(j);
+        LinearLayout linearLayoutForm = form();
+        linearLayoutForm.addView(text(jSONObjectLead.optString("name"), 22));
+        muted(linearLayoutForm, "المكالمات المسجلة والملاحظات والتغييرات — أحدث 200 تعامل");
+        final EditText editTextField = field(linearLayoutForm, "أضف ملاحظة للتعامل", "", 131073);
+        final AlertDialog[] alertDialogArr = new AlertDialog[1];
+        primary(button(linearLayoutForm, "حفظ الملاحظة", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$timeline$105(editTextField, j, alertDialogArr);
+            }
+        }));
+        ArrayList<JSONObject> arrayListQuery = this.store.query("SELECT * FROM events WHERE leadId=? ORDER BY at DESC,id DESC LIMIT 200", String.valueOf(j));
+        if (arrayListQuery.isEmpty()) {
+            muted(linearLayoutForm, "لا يوجد سجل تعاملات بعد. التحديث لا يستنتج أحداثًا قديمة لم تُسجّل.");
+        }
+        for (JSONObject jSONObject : arrayListQuery) {
+            LinearLayout linearLayoutCard = card(linearLayoutForm);
+            muted(linearLayoutCard, DateFormat.format("yyyy-MM-dd HH:mm", jSONObject.optLong("at")).toString());
+            TextView textViewText = text(jSONObject.optString("body"), 15);
+            textViewText.setTextIsSelectable(true);
+            linearLayoutCard.addView(textViewText);
+        }
+        alertDialogArr[0] = panel("سجل التعاملات", linearLayoutForm);
+    }
+
+    private void tools(LinearLayout linearLayout, final JSONObject jSONObject, final AlertDialog alertDialog) {
+        linearLayout.addView(text("ملف العميل", 20));
+        if (!jSONObject.optString("phone").isEmpty() && !jSONObject.optString("phone").equals("null")) {
+            button(linearLayout, "حفظ في جهات اتصال الهاتف", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$tools$33(jSONObject);
+                }
+            });
+        }
+        if (jSONObject.optString("business").equals("software")) {
+            button(linearLayout, "اشتراكات وطلبات هذا العميل", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$tools$34(jSONObject);
+                }
+            });
+        }
+        button(linearLayout, "سجل التعاملات والملاحظات", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$tools$35(jSONObject);
+            }
+        });
+        button(linearLayout, "تفاصيل طلب العميل", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$tools$36(jSONObject);
+            }
+        });
+        button(linearLayout, "قوالب رسائل واتساب", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$tools$37(jSONObject);
+            }
+        });
+        if (!jSONObject.optString("followUp").isEmpty()) {
+            button(linearLayout, "تمت المتابعة", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$tools$38(alertDialog, jSONObject);
+                }
+            });
+            button(linearLayout, "تأجيل المتابعة إلى الغد", new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$tools$39(alertDialog, jSONObject);
+                }
+            });
+        }
+        muted(linearLayout, "هذه الإجراءات تخص البيانات المحفوظة؛ احفظ تعديلات النموذج أولًا.");
+    }
+
+    private String tr(String str, String str2) {
+        return AppLanguage.text(this, str, str2);
+    }
+
+    private void writeCsv(final Uri uri) {
+        final String str = this.pendingCsv;
+        this.pendingCsv = null;
+        if (str == null) {
+            return;
+        }
+        this.backgroundOps++;
+        new Thread(new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.lambda$writeCsv$92(str, uri);
+            }
+        }, "csv-export").start();
+    }
+
+    private void writeEncryptedBackup(final Uri uri) {
+        final char[] cArr = this.pendingBackupPassword;
+        this.pendingBackupPassword = null;
+        if (cArr == null) {
+            alert("أعد إنشاء النسخة وحدد كلمة مرور");
+        } else {
+            this.backgroundOps++;
+            new Thread(new Runnable() {
+                @Override
+                public final void run() {
+                    MainActivity.this.lambda$writeEncryptedBackup$94(cArr, uri);
+                }
+            }, "encrypted-backup").start();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int i, int i2, Intent intent) {
+        char[] cArr;
+        super.onActivityResult(i, i2, intent);
+        if (i == 40) {
+            if (i2 == -1) {
+                render();
+            }
+            return;
+        }
+        if (i == 20 && i2 != -1 && (cArr = this.pendingBackupPassword) != null) {
+            Arrays.fill(cArr, (char) 0);
+            this.pendingBackupPassword = null;
+            return;
+        }
+        if (i == 30) {
+            if (this.postDraft == null) {
+                return;
+            }
+            if (i2 == -1 && intent != null && intent.getData() != null) {
+                try {
+                    this.postDraft.put("image", PostMedia.importUri(this, intent.getData()));
+                } catch (Exception e) {
+                    alert(e.getMessage() == null ? "تعذر إضافة الصورة" : e.getMessage());
+                }
+            }
+            lambda$advertising$114(this.postDraft);
+            return;
+        }
+        if (i == 11 && getSharedPreferences("settings", 0).getBoolean("setupPending", false)) {
+            getSharedPreferences("settings", 0).edit().putBoolean("setupPending", false).apply();
+            requestCallPermissions();
+            return;
+        }
+        if (i2 != -1 || intent == null || intent.getData() == null) {
+            return;
+        }
+        if (i == 31) {
+            importCallCsv(intent.getData());
+            return;
+        }
+        if (i == 32) {
+            importContactVcf(intent.getData());
+            return;
+        }
+        try {
+            if (i == 20) {
+                writeEncryptedBackup(intent.getData());
+            } else if (i == 41) {
+                writeCsv(intent.getData());
+            } else if (i == 21) {
+                restoreSelected(intent.getData());
+            }
+        } catch (Exception e2) {
+            alert("تعذر حفظ أو استعادة النسخة: " + (e2.getMessage() == null ? "تحقق من الملف والمساحة" : e2.getMessage()) + ". عند فشل الاستعادة لا تُستبدل قاعدة البيانات جزئيًا.");
+        }
+    }
+
+    @Override
+    public void onCreate(Bundle bundle) {
+        super.onCreate(bundle);
+        AppLanguage.apply(this);
+        this.cairo = Typeface.createFromAsset(getAssets(), "fonts/Cairo.ttf");
+        this.store = new Store(this);
+        if (bundle != null) {
+            this.business = "survey";
+            this.tab = bundle.getString("tab", "home");
+            this.followDate = bundle.getString("followDate", "");
+            this.customerStageFilter = bundle.getInt("customerStageFilter", 0);
+        }
+        this.ready = true;
+        render();
+        receive(getIntent());
+        if (!getSharedPreferences("settings", 0).getBoolean("notificationsSetup19", false)) {
+            getSharedPreferences("settings", 0).edit().putBoolean("notificationsSetup19", true).apply();
+            enableNotifications();
+        }
+        if (bundle == null || !bundle.containsKey("postDraft")) {
+            return;
+        }
+        try {
+            lambda$advertising$114(new JSONObject(bundle.getString("postDraft")));
+        } catch (Exception unused) {
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        char[] cArr = this.pendingBackupPassword;
+        if (cArr != null) {
+            Arrays.fill(cArr, (char) 0);
+        }
+        if (this.backgroundOps == 0) {
+            this.store.close();
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        receive(intent);
+    }
+
+    @Override
+    public void onPostCreate(Bundle bundle) {
+        super.onPostCreate(bundle);
+        AppLanguage.watch(this);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int i, String[] strArr, int[] iArr) {
+        super.onRequestPermissionsResult(i, strArr, iArr);
+        if (i == 13) {
+            Reminders.channel(this);
+            Reminders.deliver(this);
+            Reminders.schedule(this);
+            render();
+            if (iArr.length == 0 || iArr[0] != 0) {
+                alert("لم يُمنح إذن الإشعارات. تبقى المتابعات ظاهرة في قائمة اليوم.");
+            }
+        }
+        if (i == 12) {
+            if (checkSelfPermission("android.permission.READ_CALL_LOG") == 0) {
+                importHistory();
+            } else {
+                alert("لم يُمنح إذن السجل. يمكنك إضافة العملاء يدويًا واستقبال المكالمات الجديدة عند تفعيل دور تحديد المتصل.");
+            }
+        }
+        if (i == 10) {
+            if (checkSelfPermission("android.permission.READ_CONTACTS") == 0) {
+                syncContactNames(true, null);
+            } else {
+                alert("لم يُمنح إذن جهات الاتصال؛ لن تظهر الأسماء المسجلة على الهاتف.");
+            }
+        }
+        if (i == 14) {
+            if (checkSelfPermission("android.permission.READ_CONTACTS") == 0) {
+                syncContactNames(false, this::openCallCsv);
+            } else {
+                alert("سيُستورد الملف دون أسماء الهاتف لأن إذن جهات الاتصال لم يُمنح.");
+                openCallCsv();
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (this.ready && isUnlocked()) {
+            render();
+            Reminders.schedule(this);
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle bundle) {
+        if (this.postDraft != null) {
+            capturePost();
+            bundle.putString("postDraft", this.postDraft.toString());
+        }
+        bundle.putString("followDate", this.followDate);
+        bundle.putInt("customerStageFilter", this.customerStageFilter);
+        bundle.putString("business", this.business);
+        bundle.putString("tab", this.tab);
+        super.onSaveInstanceState(bundle);
+    }
+
+    String visualSection() {
+        return this.tab.equals("unassigned") ? "messages" : this.tab;
+    }
 }
