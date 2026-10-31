@@ -13,7 +13,7 @@ import java.util.*;
 import org.json.JSONObject;
 
 /** دفتر ميداني مبسط: العهدة والتحصيلات والمصروفات، دون تحويله إلى نظام محاسبي معقد. */
-public final class LedgerActivity extends Activity {
+public final class LedgerActivity extends BaseSecureActivity {
     private final int INK=0xff102a43,MUTED=0xff627487,TEAL=0xff0f766e,BG=0xfff5f7fa,LINE=0xffdae2ea;
     private Store store;private LinearLayout body;private Typeface font;
     @Override public void onCreate(Bundle state){super.onCreate(state);font=Typeface.createFromAsset(getAssets(),"fonts/Cairo.ttf");store=new Store(this);list();}

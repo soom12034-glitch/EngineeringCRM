@@ -1,7 +1,7 @@
 package com.amalaei.engineering;
 import android.app.*;import android.os.Bundle;import android.content.*;import android.graphics.*;import android.net.Uri;import android.widget.*;import org.json.*;import java.util.*;
 @android.annotation.SuppressLint("SetTextI18n")
-public final class QuoteActivity extends Activity {
+public final class QuoteActivity extends BaseSecureActivity {
  Store store;LinearLayout body,itemsBody;android.graphics.Typeface font;JSONObject draft;ArrayList<EditText[]> rows=new ArrayList<>();Map<String,EditText> fields=new LinkedHashMap<>();TextView totals;String savedSnapshot="";ArrayList<TextView> rowTitles=new ArrayList<>();int listFilter=0;
  public void onCreate(Bundle b){super.onCreate(b);if(android.os.Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,()->{if(draft==null)finish();else leave();});font=android.graphics.Typeface.createFromAsset(getAssets(),"fonts/Cairo.ttf");store=new Store(this);if(b!=null&&b.containsKey("draft"))try{draft=new JSONObject(b.getString("draft"));editor();return;}catch(Exception ignored){}String pending=getPreferences(0).getString("draft","");if(!pending.isEmpty())try{draft=new JSONObject(pending);editor();return;}catch(Exception ignored){}list();}
  @Override public void onPostCreate(Bundle state){super.onPostCreate(state);AppLanguage.apply(this);AppLanguage.watch(this);}

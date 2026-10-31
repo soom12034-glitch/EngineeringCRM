@@ -2,10 +2,10 @@ plugins { id 'com.android.application' }
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('keystore.properties')
 if (keystorePropertiesFile.exists()) keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-def uploadStoreFile = System.getenv('ANDROID_UPLOAD_STORE_FILE') ?: keystoreProperties['storeFile']
-def uploadStorePassword = System.getenv('ANDROID_UPLOAD_STORE_PASSWORD') ?: keystoreProperties['storePassword']
-def uploadKeyAlias = System.getenv('ANDROID_UPLOAD_KEY_ALIAS') ?: keystoreProperties['keyAlias']
-def uploadKeyPassword = System.getenv('ANDROID_UPLOAD_KEY_PASSWORD') ?: keystoreProperties['keyPassword']
+def uploadStoreFile = System.getenv('ANDROID_UPLOAD_STORE_FILE') ?: keystoreProperties['uploadStoreFile'] ?: keystoreProperties['storeFile']
+def uploadStorePassword = System.getenv('ANDROID_UPLOAD_STORE_PASSWORD') ?: keystoreProperties['uploadStorePassword'] ?: keystoreProperties['storePassword']
+def uploadKeyAlias = System.getenv('ANDROID_UPLOAD_KEY_ALIAS') ?: keystoreProperties['uploadKeyAlias'] ?: keystoreProperties['keyAlias']
+def uploadKeyPassword = System.getenv('ANDROID_UPLOAD_KEY_PASSWORD') ?: keystoreProperties['uploadKeyPassword'] ?: keystoreProperties['keyPassword']
 def releaseSigningReady = uploadStoreFile && uploadStorePassword && uploadKeyAlias && uploadKeyPassword
 android {
     namespace 'com.amalaei.engineering'
@@ -14,12 +14,20 @@ android {
         applicationId 'com.soom12034.engineeringcrm'
         minSdk 29
         targetSdk 36
-        versionCode 27
-        versionName '1.4.3'
+        versionCode 34
+        versionName '1.4.10'
         buildConfigField 'String', 'PRIVACY_POLICY_URL', '"https://soom12034-glitch.github.io/EngineeringCRM/privacy-policy.html"'
     }
     signingConfigs {
         release {
+            if (keystoreProperties['storeFile']) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+        upload {
             if (releaseSigningReady) {
                 storeFile rootProject.file(uploadStoreFile)
                 storePassword uploadStorePassword
@@ -28,20 +36,17 @@ android {
             }
         }
     }
-    buildTypes {
-        release {
-            if (releaseSigningReady) signingConfig signingConfigs.release
-        }
-    }
     flavorDimensions 'distribution'
     productFlavors {
         play {
             dimension 'distribution'
+            signingConfig signingConfigs.upload
             buildConfigField 'boolean', 'DIRECT_CALL_LOG', 'false'
         }
         direct {
             dimension 'distribution'
             versionNameSuffix '-direct'
+            signingConfig signingConfigs.release
             buildConfigField 'boolean', 'DIRECT_CALL_LOG', 'true'
         }
     }

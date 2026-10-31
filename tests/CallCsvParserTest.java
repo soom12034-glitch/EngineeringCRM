@@ -13,6 +13,8 @@ public final class CallCsvParserTest {
         ArrayList<ArrayList<String>> unknown=CallCsvImporter.parse("تقرير المكالمات;;\nجهة الاتصال;معرّف;بدء المكالمة\nأحمد;جوال: 0551234567;2026-10-07 12:00\nشركة;0507654321;2026-10-07 13:00");
         int header=CallCsvImporter.headerRow(unknown),phone=CallCsvImporter.inferPhoneColumn(unknown,header+1);
         if(header!=1||phone!=1||!CallCsvImporter.phoneValue(unknown.get(2).get(phone)).equals("+966551234567"))throw new AssertionError("unknown phone header inference failed");
+        ArrayList<ArrayList<String>> plain=CallCsvImporter.parse("تقرير المكالمات\nالاسم;الهاتف;التاريخ\nأحمد;0551234567;2026-10-07 12:00");
+        if(plain.size()!=3||plain.get(2).size()!=3||!plain.get(2).get(0).equals("أحمد"))throw new AssertionError("separator must not depend on a preamble line");
         System.out.println("PASS: call CSV parser supports quoted comma, Arabic semicolon, tab, preambles, unknown headers and Arabic digits.");
     }
 }

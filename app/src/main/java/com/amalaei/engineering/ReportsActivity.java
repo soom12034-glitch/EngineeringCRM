@@ -2,7 +2,7 @@ package com.amalaei.engineering;
 
 import android.app.*;import android.os.Bundle;import android.graphics.Color;import android.widget.*;import org.json.*;import java.time.*;import java.util.*;import java.math.*;
 
-public final class ReportsActivity extends Activity {
+public final class ReportsActivity extends BaseSecureActivity {
     Store store;LinearLayout body;android.graphics.Typeface font;int period=0;
     public void onCreate(Bundle state){super.onCreate(state);font=android.graphics.Typeface.createFromAsset(getAssets(),"fonts/Cairo.ttf");store=new Store(this);show();}
     protected void onDestroy(){store.close();super.onDestroy();}

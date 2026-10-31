@@ -9,7 +9,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.*;
 import java.math.BigDecimal;
 
-public final class CalculatorActivity extends Activity {
+public final class CalculatorActivity extends BaseSecureActivity {
     private final Calculator calculator=new Calculator();
     private TextView expression,result,status,subtitle,screenCaption,outputCaption,screenTaxLine;
     private Button addMode,includedMode,rateButton;
