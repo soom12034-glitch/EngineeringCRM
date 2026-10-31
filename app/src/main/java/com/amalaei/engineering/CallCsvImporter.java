@@ -17,9 +17,9 @@ final class CallCsvImporter {
         if(csv==null||csv.trim().isEmpty())throw new IllegalArgumentException("ملف سجل المكالمات فارغ");
         ArrayList<ArrayList<String>> records=parse(csv);
         if(records.isEmpty())throw new IllegalArgumentException("لم يُعثر على صفوف في الملف");
-        int headerRow=headerRow(records),start=headerRow<0?0:headerRow+1;ArrayList<String> first=records.get(headerRow<0?0:headerRow);
+        int headerRow=headerRow(records),start=headerRow<0?0:headerRow+1;ArrayList<String> first=records.get(headerRow<0?firstDataRow(records):headerRow);
         int phone=headerRow>=0?column(first,"number","phone","mobile","telephone","tel","caller","address","رقم","الهاتف","الجوال","هاتف","رقمالهاتف","رقمالمكالمة","رقمالمتصل"):inferPhone(first);
-        if(phone<0)phone=inferPhoneColumn(records,start);
+        phone=resolvePhoneColumn(records,start,phone);
         int name=headerRow>=0?column(first,"name","contact","contactname","displayname","callername","cachedname","cachedcallername","الاسم","جهةالاتصال","اسمالمتصل","الاسمالمخزن"):inferName(first,phone);
         int date=headerRow>=0?column(first,"date","time","timestamp","datetime","calldate","starttime","التاريخ","الوقت","تاريخالمكالمة"):inferDate(first,phone);
         if(phone<0)throw new IllegalArgumentException("لم أتعرف على أرقام سعودية داخل الملف. تأكد أن السجل يحتوي أرقامًا تبدأ بـ 05 أو 01 أو +966");
@@ -49,11 +49,14 @@ final class CallCsvImporter {
     private static String safe(String value,int max){String v=value==null?"":value.trim();return v.length()>max?v.substring(0,max):v;}
     static boolean missingName(String value){String v=value==null?"":value.trim();if(v.isEmpty()||!phoneValue(v).isEmpty())return true;String k=key(v);return k.equals("unknown")||k.equals("unknowncaller")||k.equals("noname")||k.equals("غيرمعروف")||k.equals("رقمغيرمعروف")||k.equals("عميلغيرمعرف")||k.equals("عميلغيرمسمي");}
     private static boolean empty(ArrayList<String> row){for(String v:row)if(v!=null&&!v.trim().isEmpty())return false;return true;}
-    static boolean hasHeader(ArrayList<String> row){return column(row,"number","phone","mobile","telephone","tel","caller","address","رقم","الهاتف","الجوال","هاتف","رقمالهاتف","رقمالمكالمة","رقمالمتصل")>=0||column(row,"name","contact","contactname","displayname","callername","cachedname","cachedcallername","الاسم","جهةالاتصال","اسمالمتصل","الاسمالمخزن")>=0||column(row,"date","time","timestamp","datetime","calldate","starttime","التاريخ","الوقت","تاريخالمكالمة")>=0;}
-    static int headerRow(ArrayList<ArrayList<String>> rows){for(int i=0;i<Math.min(10,rows.size());i++)if(hasHeader(rows.get(i)))return i;return -1;}
+    static boolean hasHeader(ArrayList<String> row){if(inferPhone(row)>=0)return false;for(String v:row)if(time(v)!=Long.MIN_VALUE)return false;return column(row,"number","phone","mobile","telephone","tel","caller","address","رقم","الهاتف","الجوال","هاتف","رقمالهاتف","رقمالمكالمة","رقمالمتصل")>=0||column(row,"name","contact","contactname","displayname","callername","cachedname","cachedcallername","الاسم","جهةالاتصال","اسمالمتصل","الاسمالمخزن")>=0||column(row,"date","time","timestamp","datetime","calldate","starttime","التاريخ","الوقت","تاريخالمكالمة")>=0;}
+    static int headerRow(ArrayList<ArrayList<String>> rows){for(int i=0;i<Math.min(10,rows.size());i++){if(inferPhone(rows.get(i))>=0)return -1;if(hasHeader(rows.get(i)))return i;}return -1;}
+    static int firstDataRow(ArrayList<ArrayList<String>> rows){for(int i=0;i<rows.size();i++)if(inferPhone(rows.get(i))>=0)return i;return 0;}
     static String phoneValue(String value){String direct=Analysis.phone(value);if(!direct.isEmpty())return direct;ArrayList<String> found=Analysis.phones(value==null?"":value);return found.size()==1?found.get(0):"";}
     static int inferPhone(ArrayList<String> row){for(int i=0;i<row.size();i++)if(!phoneValue(row.get(i)).isEmpty())return i;return -1;}
-    static int inferPhoneColumn(ArrayList<ArrayList<String>> rows,int start){int columns=0;for(int i=start;i<Math.min(rows.size(),start+200);i++)columns=Math.max(columns,rows.get(i).size());int best=-1,bestScore=0;for(int column=0;column<columns;column++){int score=0;for(int i=start;i<Math.min(rows.size(),start+200);i++){ArrayList<String> row=rows.get(i);if(column<row.size()&&!phoneValue(row.get(column)).isEmpty())score++;}if(score>bestScore){best=column;bestScore=score;}}return best;}
+    private static int phoneScore(ArrayList<ArrayList<String>> rows,int start,int column){int score=0;for(int i=start;i<Math.min(rows.size(),start+200);i++){ArrayList<String> row=rows.get(i);if(column<row.size()&&!phoneValue(row.get(column)).isEmpty())score++;}return score;}
+    static int inferPhoneColumn(ArrayList<ArrayList<String>> rows,int start){int columns=0;for(int i=start;i<Math.min(rows.size(),start+200);i++)columns=Math.max(columns,rows.get(i).size());int best=-1,bestScore=0;for(int column=0;column<columns;column++){int score=phoneScore(rows,start,column);if(score>bestScore){best=column;bestScore=score;}}return best;}
+    static int resolvePhoneColumn(ArrayList<ArrayList<String>> rows,int start,int candidate){return candidate>=0&&phoneScore(rows,start,candidate)>0?candidate:inferPhoneColumn(rows,start);}
     static int inferName(ArrayList<String> row,int phone){for(int i=0;i<row.size();i++){if(i==phone)continue;String v=row.get(i)==null?"":row.get(i).trim();if(!v.isEmpty()&&Analysis.phone(v).isEmpty()&&time(v)==Long.MIN_VALUE)return i;}return -1;}
     static int inferDate(ArrayList<String> row,int phone){for(int i=0;i<row.size();i++){if(i==phone)continue;String v=row.get(i)==null?"":row.get(i).trim();if(v.isEmpty()||!Analysis.phone(v).isEmpty())continue;if(time(v)!=Long.MIN_VALUE)return i;}return -1;}
     static int column(ArrayList<String> headers,String... names){
@@ -69,14 +72,14 @@ static long time(String raw){
         if(text.matches("[0-9]+")){
             try{long n=Long.parseLong(text);
                 if(n>=100000000000L){long year=Instant.ofEpochMilli(n).atZone(ZoneId.systemDefault()).getYear();if(year>=2000&&year<=2100)return n;}
-                else if(n>=1000000000L)return n*1000L;
+                else if(n>=1000000000L){long year=Instant.ofEpochSecond(n).atZone(ZoneId.systemDefault()).getYear();if(year>=2000&&year<=2100)return n*1000L;}
                 else if(n>=20000&&n<100000)return LocalDate.of(1899,12,30).plusDays(n).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
             }catch(Exception ignored){}
         }
         try{return Instant.parse(text).toEpochMilli();}catch(Exception ignored){}
         try{return OffsetDateTime.parse(text).toInstant().toEpochMilli();}catch(Exception ignored){}
         String marked=text.replace("ص"," AM").replace("م"," PM").replaceAll("\\s+"," ").trim();
-        String[] patterns={"yyyy-MM-dd HH:mm:ss","yyyy-MM-dd HH:mm","dd/MM/yyyy HH:mm:ss","dd/MM/yyyy HH:mm","d/M/yyyy H:mm","yyyy/MM/dd HH:mm:ss","yyyy/MM/dd HH:mm","M/d/yyyy h:mm a","yyyy-MM-dd h:mm a","dd/MM/yyyy h:mm a","yyyy/MM/dd","yyyyMMddHHmmss","yyyyMMddHHmm","yyyyMMdd","ddMMyyyyHHmm","ddMMyyyy","yyyy-MM-dd"};
+        String[] patterns={"yyyy-MM-dd HH:mm:ss","yyyy-MM-dd HH:mm","dd/MM/yyyy HH:mm:ss","dd/MM/yyyy HH:mm","d/M/yyyy H:mm","yyyy/MM/dd HH:mm:ss","yyyy/MM/dd HH:mm","d/M/yyyy h:mm a","M/d/yyyy h:mm a","yyyy-MM-dd h:mm a","yyyy/MM/dd","yyyyMMddHHmmss","yyyyMMddHHmm","yyyyMMdd","ddMMyyyyHHmm","ddMMyyyy","yyyy-MM-dd"};
         for(String pattern:patterns)try{boolean dateOnly=!pattern.matches(".*[Hh:a].*");DateTimeFormatter f=DateTimeFormatter.ofPattern(pattern,Locale.US);if(dateOnly)return LocalDate.parse(marked,f).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();return LocalDateTime.parse(marked,f).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();}catch(Exception ignored){}
         return Long.MIN_VALUE;
     }
@@ -88,5 +91,5 @@ static long time(String raw){
         if(quoted)throw new IllegalArgumentException("علامات الاقتباس غير متوازنة في الملف؛ صحّح الملف وأعد المحاولة");
         row.add(cell.toString().trim());if(!empty(row))rows.add(row);return rows;
     }
-    private static char separator(String text){int comma=0,semi=0,tab=0;boolean quote=false;for(int i=0;i<text.length();i++){char c=text.charAt(i);if(c=='"')quote=!quote;else if(!quote&&(c=='\n'||c=='\r'))break;else if(!quote){if(c==',')comma++;else if(c==';')semi++;else if(c=='\t')tab++;}}return tab>comma&&tab>semi?'\t':semi>comma?';':',';}
+    private static char separator(String text){int comma=0,semi=0,tab=0,lines=0;boolean quote=false;for(int i=0;i<text.length()&&lines<10;i++){char c=text.charAt(i);if(c=='"')quote=!quote;else if(!quote&&(c=='\n'||(c=='\r'&&(i+1==text.length()||text.charAt(i+1)!='\n'))))lines++;else if(!quote){if(c==',')comma++;else if(c==';')semi++;else if(c=='\t')tab++;}}return tab>comma&&tab>semi?'\t':semi>comma?';':',';}
 }

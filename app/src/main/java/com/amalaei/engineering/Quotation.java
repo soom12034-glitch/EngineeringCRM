@@ -9,7 +9,7 @@ import java.math.*;
 import java.io.*;
 
 final class Quotation {
-    static final int NAVY=0xff12324a,TEAL=0xff13867b,GOLD=0xffd5a64a,INK=0xff1b2b3a,GRAY=0xff667482,PALE=0xfff3f7f8,LINE=0xffdce5e8,WHITE=Color.WHITE;
+    static final int NAVY=0xff102a43,TEAL=0xff147d83,GOLD=0xffd5a64a,INK=0xff1b2b3a,GRAY=0xff667482,PALE=0xfff3f7f8,LINE=0xffdce5e8,WHITE=Color.WHITE;
     static final float[] X={34,112,190,242,302,528,562};
     static final int ITEMS_PER_PAGE=4;
 
@@ -47,7 +47,7 @@ final class Quotation {
     static void txt(Canvas canvas,Typeface font,String text,float x,float y,int width,float size,int color,boolean center){txt(canvas,font,text,x,y,width,size,color,center,1);}
 
     static void txt(Canvas canvas,Typeface font,String text,float x,float y,int width,float size,int color,boolean center,int maxLines){
-        String value=text==null?"":text;TextPaint paint=new TextPaint(3);paint.setTypeface(font);paint.setTextSize(size);paint.setColor(color);
+        String value=DisplayNumbers.latin(text);TextPaint paint=new TextPaint(3);paint.setTypeface(font);paint.setTextSize(size);paint.setColor(color);
         StaticLayout.Builder builder=StaticLayout.Builder.obtain(value,0,value.length(),paint,width).setAlignment(center?Layout.Alignment.ALIGN_CENTER:Layout.Alignment.ALIGN_NORMAL).setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_RTL).setIncludePad(false).setLineSpacing(1,1.08f).setMaxLines(maxLines);
         if(maxLines==1)builder.setEllipsize(TextUtils.TruncateAt.END);StaticLayout layout=builder.build();canvas.save();canvas.translate(x,y);layout.draw(canvas);canvas.restore();
     }
