@@ -3541,6 +3541,12 @@ public final class MainActivity extends BaseSecureActivity {
                 MainActivity.this.openContactVcf();
             }
         });
+        button(this.content, "عن المطوّر", new Runnable() {
+            @Override
+            public final void run() {
+                MainActivity.this.startActivity(new Intent(MainActivity.this, DeveloperActivity.class));
+            }
+        });
         button(this.content, "سياسة الخصوصية داخل التطبيق", new Runnable() {
             @Override
             public final void run() {

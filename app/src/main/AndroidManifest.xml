@@ -14,6 +14,7 @@
     <activity android:name=".LedgerActivity" android:exported="false" />
     <activity android:name=".ReportsActivity" android:exported="false" />
     <activity android:name=".PostSharingActivity" android:exported="false" />
+    <activity android:name=".DeveloperActivity" android:exported="false" />
     <receiver android:name=".PostShareReceiver" android:exported="false">
       <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /><action android:name="android.intent.action.TIME_SET" /></intent-filter>
     </receiver>

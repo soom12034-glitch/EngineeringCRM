@@ -90,24 +90,21 @@ final class VisualPolish {
                 EditText editText = (EditText) view;
                 int inputType = editText.getInputType() & 4080;
                 if (inputType != 128 && inputType != 224 && inputType != 144 && ((editText.getInputType() & 15) != 2 || inputType != 16)) {
-                    editText.setTransformationMethod(new LatinTransformation());
-                    int inputType2 = editText.getInputType() & 15;
-                    if (inputType2 == 2 || inputType2 == 3) {
-                        InputFilter[] filters = editText.getFilters();
-                        InputFilter[] inputFilterArr = new InputFilter[filters.length + 1];
-                        System.arraycopy(filters, 0, inputFilterArr, 1, filters.length);
-                        inputFilterArr[0] = new InputFilter() {
-                            @Override
-                            public final CharSequence filter(CharSequence charSequence, int i, int i2, Spanned spanned, int i3, int i4) {
-                                return VisualPolish.lambda$visit$2(charSequence, i, i2, spanned, i3, i4);
-                            }
-                        };
-                        editText.setFilters(inputFilterArr);
-                        String string = editText.getText().toString();
-                        String strLatin = DisplayNumbers.latin(string);
-                        if (!string.equals(strLatin)) {
-                            editText.setText(strLatin);
+                    // Editable text is converted as it is entered; a TransformationMethod would show a stale copy while typing.
+                    InputFilter[] filters = editText.getFilters();
+                    InputFilter[] inputFilterArr = new InputFilter[filters.length + 1];
+                    System.arraycopy(filters, 0, inputFilterArr, 1, filters.length);
+                    inputFilterArr[0] = new InputFilter() {
+                        @Override
+                        public final CharSequence filter(CharSequence charSequence, int i, int i2, Spanned spanned, int i3, int i4) {
+                            return VisualPolish.lambda$visit$2(charSequence, i, i2, spanned, i3, i4);
                         }
+                    };
+                    editText.setFilters(inputFilterArr);
+                    String string = editText.getText().toString();
+                    String strLatin = DisplayNumbers.latin(string);
+                    if (!string.equals(strLatin)) {
+                        editText.setText(strLatin);
                     }
                 }
                 UiTheme.input(editText);
