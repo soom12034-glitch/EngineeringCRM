@@ -14,8 +14,8 @@ android {
         applicationId 'com.soom12034.engineeringcrm'
         minSdk 29
         targetSdk 36
-        versionCode 35
-        versionName '1.4.13'
+        versionCode 36
+        versionName '1.4.14'
         buildConfigField 'String', 'PRIVACY_POLICY_URL', '"https://soom12034-glitch.github.io/EngineeringCRM/privacy-policy.html"'
     }
     signingConfigs {

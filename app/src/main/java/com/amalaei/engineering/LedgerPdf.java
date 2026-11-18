@@ -2,232 +2,258 @@ package com.amalaei.engineering;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.pdf.PdfDocument;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextDirectionHeuristics;
+import android.text.TextPaint;
+import android.text.TextUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import org.json.JSONObject;
 
+/**
+ * A4 ledger statement: entries in date order with a running cash balance that carries across pages,
+ * separate in/out columns, a totals row and signature boxes on the last page.
+ */
 final class LedgerPdf {
-    private static final int BAR = -15434365;
-    private static final int EXPENSE = -4959479;
-    private static final int PER_PAGE = 7;
+    private static final int TEAL = -15434365, NAVY = -15717821, INK = -14996678, GRAY = -10062718, EXPENSE = -4959479;
+    private static final int PALE = -788488, ROW_A = -460037, ROW_B = -1116939, RULE = -2300440, TOTAL_BG = -2034959, WHITE = -1;
+    private static final float LEFT = 34, RIGHT = 562, WIDTH = RIGHT - LEFT, TABLE_BOTTOM = 772, HEAD_H = 24, PAD = 6;
+    private static final float FIRST_TABLE_TOP = 284, NEXT_TABLE_TOP = 70, CLOSING_H = 168;
+    /** Column edges from left to right: balance, out, in, type, description, date. */
+    private static final float[] EDGES = {34, 104, 174, 244, 314, 490, 562};
+    private static final String[] HEADS = {"الرصيد النقدي", "منصرف", "وارد", "النوع", "البيان والملاحظة", "التاريخ"};
+    private static final String CURRENCY = " ر.س";
 
-    LedgerPdf() {
+    private static final class Row {
+        String date = "", time = "", type = "", in = "", out = "", balance = "";
+        StaticLayout description;
+        float height;
+        boolean opening, negative;
     }
 
-    static File create(Context context, JSONObject jSONObject, List<JSONObject> list) throws Exception {
-        float[] fArr;
-        String str;
-        BigDecimal bigDecimal;
-        int i;
-        BigDecimal bigDecimal2;
-        String str2 = "دفتر";
-        Typeface typefaceCreateFromAsset = Typeface.createFromAsset(context.getAssets(), "fonts/Cairo.ttf");
-        PdfDocument pdfDocument = new PdfDocument();
+    private LedgerPdf() {
+    }
+
+    static File create(Context context, JSONObject book, List<JSONObject> allEntries, LedgerFilter filter) throws Exception {
+        Typeface font = Typeface.createFromAsset(context.getAssets(), "fonts/Cairo.ttf");
+        Typeface bold = Typeface.create(font, Typeface.BOLD);
+        ArrayList<JSONObject> entries = filter.periodEntries(allEntries);
+        boolean period = filter.hasPeriod();
+        BigDecimal carried = period ? LedgerMath.balanceBefore(book, allEntries, filter.from) : LedgerMath.opening(book);
+        BigDecimal[] running = LedgerMath.running(carried, entries);
+        BigDecimal closing = running.length == 0 ? carried : running[running.length - 1];
+        SimpleDateFormat day = new SimpleDateFormat("dd/MM/yyyy", Locale.US), clock = new SimpleDateFormat("HH:mm", Locale.US);
+        String carriedLabel = period ? "رصيد أول المدة" : "رصيد افتتاحي";
+
+        ArrayList<Row> rows = new ArrayList<>();
+        Row opening = new Row();
+        opening.opening = true;
+        long openingAt = period ? filter.from : book.optLong("createdAt", entries.isEmpty() ? System.currentTimeMillis() : entries.get(0).optLong("at"));
+        opening.date = day.format(new Date(openingAt));
+        opening.type = "—";
+        opening.balance = amount(carried);
+        opening.negative = carried.signum() < 0;
+        opening.description = layout(bold, period ? "رصيد مرحّل من الفترة السابقة" : "الرصيد الافتتاحي للدفتر", 9.5f, NAVY, descriptionWidth(), 2);
+        opening.height = rowHeight(opening.description, false);
+        rows.add(opening);
+        for (int i = 0; i < entries.size(); i++) {
+            JSONObject entry = entries.get(i);
+            Row row = new Row();
+            boolean in = "in".equals(entry.optString("kind"));
+            Date at = new Date(entry.optLong("at"));
+            row.date = day.format(at);
+            row.time = clock.format(at);
+            row.type = in ? "تحصيل " + LedgerMath.methodLabel(entry.optString("paymentMethod", "cash")) : "مصروف";
+            if (in) row.in = amount(LedgerMath.value(entry)); else row.out = amount(LedgerMath.value(entry));
+            row.balance = amount(running[i]);
+            row.negative = running[i].signum() < 0;
+            String marker = entry.optString("marker").trim(), note = entry.optString("note").trim();
+            String text = entry.optString("title") + (marker.isEmpty() ? "" : "  • " + marker) + (note.isEmpty() ? "" : "\nملاحظة: " + note);
+            row.description = layout(font, text, 9.5f, INK, descriptionWidth(), note.isEmpty() ? 2 : 4);
+            row.height = rowHeight(row.description, true);
+            rows.add(row);
+        }
+
+        ArrayList<ArrayList<Row>> pages = new ArrayList<>();
+        ArrayList<Row> page = new ArrayList<>();
+        pages.add(page);
+        float y = FIRST_TABLE_TOP + HEAD_H;
+        for (Row row : rows) {
+            if (y + row.height > TABLE_BOTTOM && !page.isEmpty()) {
+                page = new ArrayList<>();
+                pages.add(page);
+                y = NEXT_TABLE_TOP + HEAD_H;
+            }
+            page.add(row);
+            y += row.height;
+        }
+        if (y + CLOSING_H > TABLE_BOTTOM + 8) {
+            // Carry the last few rows over so the totals and signatures never sit alone on a page.
+            ArrayList<Row> last = new ArrayList<>();
+            while (page.size() > 1 && last.size() < 3) last.add(0, page.remove(page.size() - 1));
+            pages.add(last);
+        }
+
+        String issued = new SimpleDateFormat("dd/MM/yyyy  HH:mm", Locale.US).format(new Date());
+        String range = period ? "من " + day.format(new Date(filter.from)) + " إلى " + day.format(new Date(filter.to)) : "جميع الحركات";
+        PdfDocument document = new PdfDocument();
         try {
-            BigDecimal bigDecimalCollections = LedgerMath.collections(list, "cash");
-            BigDecimal bigDecimalCollections2 = LedgerMath.collections(list, "network");
-            BigDecimal bigDecimalCollections3 = LedgerMath.collections(list, "transfer");
-            BigDecimal bigDecimal3 = LedgerMath.total(list, "out");
-            BigDecimal bigDecimal4 = LedgerMath.totalCollections(list);
-            BigDecimal bigDecimalNetActivity = LedgerMath.netActivity(list);
-            BigDecimal bigDecimalBalance = LedgerMath.balance(jSONObject, list);
-            int iMax = Math.max(1, (list.size() + 6) / PER_PAGE);
-            int i2 = 1;
-            BigDecimal bigDecimal5 = bigDecimalCollections;
-            int i3 = 0;
-            while (i3 < iMax) {
-                int i4 = i3;
-                i3 = i4 + 1;
-                int i5 = iMax;
-                BigDecimal bigDecimal6 = bigDecimalCollections2;
-                PdfDocument.Page pageStartPage = pdfDocument.startPage(new PdfDocument.PageInfo.Builder(595, 842, i3).create());
-                Canvas canvas = pageStartPage.getCanvas();
-                canvas.drawColor(-1);
-                Quotation.rect(canvas, 0.0f, 0.0f, 595.0f, 8.0f, BAR);
-                Quotation.rect(canvas, 0.0f, 8.0f, 595.0f, 112.0f, -788488);
-                Quotation.txt(canvas, typefaceCreateFromAsset, "كشف حركة دفتر", 34.0f, 26.0f, 527, 25.0f, -15717821, false);
-                Quotation.txt(canvas, typefaceCreateFromAsset, jSONObject.optString("name"), 34.0f, 61.0f, 527, 18.0f, -14996678, false);
-                    Quotation.txt(canvas, typefaceCreateFromAsset, "تاريخ الإصدار: " + new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US).format(new Date()), 34.0f, 91.0f, 527, 10.0f, -10062718, false);
-                    Typeface typeface = typefaceCreateFromAsset;
-                    BigDecimal bigDecimal7 = bigDecimal5;
-                    BigDecimal bigDecimal8 = bigDecimal6;
-                    String str3 = str2;
-                        summary(canvas, typeface, jSONObject, bigDecimal7, bigDecimal8, bigDecimalCollections3, bigDecimal3, bigDecimal4, bigDecimalNetActivity, bigDecimalBalance);
-                        Canvas canvas2 = canvas;
-                        typefaceCreateFromAsset = typeface;
-                        Quotation.rounded(canvas2, 34.0f, 302.0f, 562.0f, 334.0f, 7.0f, BAR);
-                        String[] strArr = new String[5];
-                        strArr[0] = "الرصيد النقدي";
-                        strArr[i2] = "المبلغ";
-                        strArr[2] = "النوع";
-                        strArr[3] = "البيان والملاحظة";
-                        strArr[4] = "التاريخ";
-                        int i6 = 3;
-                        float[] fArr2 = {34.0f, 126.0f, 218.0f, 304.0f, 462.0f, 562.0f};
-                        int i7 = 0;
-                        while (true) {
-                            fArr = fArr2;
-                            if (i7 >= 5) {
-                                break;
-                            }
-                            String str4 = strArr[i7];
-                            float f = fArr[i7];
-                            i7++;
-                            String[] strArr2 = strArr;
-                            Canvas canvas3 = canvas2;
-                            Quotation.txt(canvas3, typefaceCreateFromAsset, str4, f + 3.0f, 310.0f, (int) ((fArr[i7] - f) - 6.0f), 10.0f, -1, true);
-                            canvas2 = canvas3;
-                            fArr2 = fArr;
-                            strArr = strArr2;
-                        }
-                        Canvas canvas4 = canvas2;
-                        BigDecimal bigDecimalOpening = LedgerMath.opening(jSONObject);
-                        int size = list.size() - 1;
-                        while (true) {
-                            str = "amount";
-                            bigDecimal = bigDecimal8;
-                            if (size < 0) {
-                                break;
-                            }
-                            BigDecimal bigDecimal9 = bigDecimalCollections3;
-                            JSONObject jSONObject2 = list.get(size);
-                            BigDecimal bigDecimal10 = bigDecimal3;
-                            try {
-                                bigDecimal2 = bigDecimal4;
-                                try {
-                                    BigDecimal bigDecimal11 = new BigDecimal(jSONObject2.optString("amount", "0"));
-                                    if (jSONObject2.optString("kind").equals("out")) {
-                                        bigDecimalOpening = bigDecimalOpening.subtract(bigDecimal11);
-                                    } else if (jSONObject2.optString("paymentMethod", "cash").equals("cash")) {
-                                        bigDecimalOpening = bigDecimalOpening.add(bigDecimal11);
-                                    }
-                                } catch (Exception unused) {
-                                }
-                            } catch (Exception unused2) {
-                                bigDecimal2 = bigDecimal4;
-                            }
-                            size--;
-                            bigDecimal8 = bigDecimal;
-                            bigDecimalCollections3 = bigDecimal9;
-                            bigDecimal3 = bigDecimal10;
-                            bigDecimal4 = bigDecimal2;
-                        }
-                        BigDecimal bigDecimal12 = bigDecimalCollections3;
-                        BigDecimal bigDecimal13 = bigDecimal3;
-                        BigDecimal bigDecimal14 = bigDecimal4;
-                        int i8 = i4 * PER_PAGE;
-                        int iMin = Math.min(list.size(), i8 + PER_PAGE);
-                        int i9 = i8;
-                        float f2 = 334.0f;
-                        while (i9 < iMin) {
-                            JSONObject jSONObject3 = list.get(i9);
-                            int i10 = i8;
-                            int i11 = iMin;
-                            BigDecimal bigDecimal15 = new BigDecimal(jSONObject3.optString(str, "0"));
-                            String str5 = str;
-                            boolean zEquals = jSONObject3.optString("kind").equals("in");
-                            String strTrim = jSONObject3.optString("note").trim();
-                            float f3 = f2 + (strTrim.isEmpty() ? 54 : 58);
-                            Quotation.rect(canvas4, 34.0f, f2, 562.0f, f3, (i9 - i10) % 2 == 0 ? -460037 : -1116939);
-                            float f4 = f2;
-                            String strOptString = jSONObject3.optString("marker");
-                            int i12 = i9;
-                            BigDecimal bigDecimal16 = bigDecimalNetActivity;
-                            String str6 = jSONObject3.optString("title") + (strOptString.isEmpty() ? "" : "  • " + strOptString) + (strTrim.isEmpty() ? "" : "\nملاحظة: " + strTrim);
-                            String str7 = zEquals ? "تحصيل " + LedgerMath.methodLabel(jSONObject3.optString("paymentMethod", "cash")) : "مصروف نقدي";
-                            String str8 = new SimpleDateFormat("dd/MM/yyyy\nHH:mm", Locale.US).format(new Date(jSONObject3.optLong("at")));
-                            String[] strArr3 = new String[5];
-                            strArr3[0] = LedgerMath.number(bigDecimalOpening);
-                            strArr3[i2] = LedgerMath.number(bigDecimal15);
-                            strArr3[2] = str7;
-                            strArr3[i6] = str6;
-                            strArr3[4] = str8;
-                            int i13 = 0;
-                            while (i13 < 5) {
-                                String str9 = strArr3[i13];
-                                float f5 = fArr[i13];
-                                float f6 = f5 + 3.0f;
-                                float f7 = f4 + 8.0f;
-                                int i14 = i13 + 1;
-                                int i15 = (int) ((fArr[i14] - f5) - 6.0f);
-                                if (i13 == i2) {
-                                    i = zEquals ? BAR : EXPENSE;
-                                } else {
-                                    i = -14996678;
-                                }
-                                int i16 = i6;
-                                Quotation.txt(canvas4, typefaceCreateFromAsset, str9, f6, f7, i15, 10.0f, i, true, (i13 != i16 || strTrim.isEmpty()) ? 2 : i16);
-                                i6 = i16;
-                                i13 = i14;
-                                i2 = 1;
-                            }
-                            int i17 = i6;
-                            if (zEquals && jSONObject3.optString("paymentMethod", "cash").equals("cash")) {
-                                bigDecimalOpening = bigDecimalOpening.subtract(bigDecimal15);
-                            } else if (!zEquals) {
-                                bigDecimalOpening = bigDecimalOpening.add(bigDecimal15);
-                            }
-                            Quotation.line(canvas4, 34.0f, f3 - 1.0f, 562.0f, -2300440);
-                            i9 = i12 + 1;
-                            i6 = i17;
-                            i8 = i10;
-                            iMin = i11;
-                            str = str5;
-                            f2 = f3;
-                            bigDecimalNetActivity = bigDecimal16;
-                            bigDecimalBalance = bigDecimalBalance;
-                            i2 = 1;
-                        }
-                        Quotation.line(canvas4, 34.0f, 777.0f, 562.0f, -2300440);
-                        Quotation.txt(canvas4, typefaceCreateFromAsset, "تم إنشاؤه من تواصل • صفحة " + i3 + " من " + i5, 34.0f, 793.0f, 528, 9.0f, -10062718, true);
-                        pdfDocument.finishPage(pageStartPage);
-                        iMax = i5;
-                        str2 = str3;
-                        bigDecimal5 = bigDecimal7;
-                        bigDecimalCollections2 = bigDecimal;
-                        bigDecimalCollections3 = bigDecimal12;
-                        bigDecimal3 = bigDecimal13;
-                        bigDecimal4 = bigDecimal14;
-                        bigDecimalNetActivity = bigDecimalNetActivity;
-                        bigDecimalBalance = bigDecimalBalance;
-                        i2 = 1;
+            for (int p = 0; p < pages.size(); p++) {
+                PdfDocument.Page sheet = document.startPage(new PdfDocument.PageInfo.Builder(595, 842, p + 1).create());
+                Canvas canvas = sheet.getCanvas();
+                canvas.drawColor(WHITE);
+                float top;
+                if (p == 0) {
+                    Quotation.rect(canvas, 0, 0, 595, 8, TEAL);
+                    Quotation.rect(canvas, 0, 8, 595, 112, PALE);
+                    Quotation.txt(canvas, bold, "كشف حركة دفتر", LEFT, 20, (int) WIDTH, 21, NAVY, false);
+                    Quotation.txt(canvas, font, book.optString("name"), LEFT, 52, (int) WIDTH, 15, INK, false);
+                    Quotation.txt(canvas, font, "الفترة: " + range + "     •     عدد الحركات: " + entries.size() + "     •     تاريخ الإصدار: " + issued, LEFT, 84, (int) WIDTH, 8.5f, GRAY, false);
+                    summary(canvas, font, bold, carriedLabel, carried, entries, closing);
+                    top = FIRST_TABLE_TOP;
+                } else {
+                    Quotation.rect(canvas, 0, 0, 595, 6, TEAL);
+                    Quotation.rect(canvas, 0, 6, 595, 54, PALE);
+                    Quotation.txt(canvas, bold, "كشف حركة دفتر — " + book.optString("name"), LEFT, 16, (int) WIDTH, 12, NAVY, false);
+                    Quotation.txt(canvas, font, "الفترة: " + range + "  •  تابع", LEFT, 34, (int) WIDTH, 8, GRAY, false);
+                    top = NEXT_TABLE_TOP;
+                }
+                ArrayList<Row> pageRows = pages.get(p);
+                float cursor = top;
+                if (!pageRows.isEmpty() || p == pages.size() - 1) {
+                    tableHead(canvas, bold, cursor);
+                    cursor += HEAD_H;
+                }
+                for (int r = 0; r < pageRows.size(); r++) {
+                    Row row = pageRows.get(r);
+                    drawRow(canvas, font, bold, row, cursor, row.opening ? TOTAL_BG : (r % 2 == 0 ? ROW_A : ROW_B));
+                    cursor += row.height;
+                }
+                if (p == pages.size() - 1) closing(canvas, font, bold, cursor, entries, closing);
+                Quotation.line(canvas, LEFT, 786, RIGHT, RULE);
+                Quotation.txt(canvas, font, "تم إنشاؤه بتطبيق تواصل  •  صفحة " + (p + 1) + " من " + pages.size(), LEFT, 792, (int) WIDTH, 8.5f, GRAY, true);
+                document.finishPage(sheet);
             }
-            String str10 = str2;
-            String strTrim2 = DisplayNumbers.latin(jSONObject.optString("name", str10)).replaceAll("[\\\\/:*?\"<>|\\r\\n]+", " ").trim();
-            String strSubstring = strTrim2.isEmpty() ? str10 : strTrim2;
-            if (strSubstring.length() > 70) {
-                strSubstring = strSubstring.substring(0, 70);
-            }
-            File file = new File(context.getCacheDir(), "كشف " + strSubstring + " " + new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(new Date()) + ".pdf");
-            try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
-                pdfDocument.writeTo(fileOutputStream);
+            String safe = DisplayNumbers.latin(book.optString("name", "دفتر")).replaceAll("[\\\\/:*?\"<>|\\r\\n]+", " ").trim();
+            if (safe.isEmpty()) safe = "دفتر";
+            if (safe.length() > 70) safe = safe.substring(0, 70);
+            String span = period ? " " + new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(filter.from)) + " - " + new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(filter.to)) : "";
+            File file = new File(context.getCacheDir(), "كشف " + safe + span + " " + new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(new Date()) + ".pdf");
+            try (FileOutputStream stream = new FileOutputStream(file)) {
+                document.writeTo(stream);
             }
             return file;
         } finally {
-            pdfDocument.close();
+            document.close();
         }
     }
 
-    private static void summary(Canvas canvas, Typeface typeface, JSONObject jSONObject, BigDecimal bigDecimal, BigDecimal bigDecimal2, BigDecimal bigDecimal3, BigDecimal bigDecimal4, BigDecimal bigDecimal5, BigDecimal bigDecimal6, BigDecimal bigDecimal7) {
-        Quotation.rounded(canvas, 34.0f, 130.0f, 562.0f, 274.0f, 10.0f, -788488);
-        String[] strArr = {"رصيد افتتاحي", "تحصيل كاش", "تحصيل شبكة", "تحصيل تحويل", "إجمالي قبل المصروفات", "المصروفات", "الصافي بعد المصروفات", "نقدية المندوب"};
-        BigDecimal[] bigDecimalArr = {LedgerMath.opening(jSONObject), bigDecimal, bigDecimal2, bigDecimal3, bigDecimal5, bigDecimal4, bigDecimal6, bigDecimal7};
-        int[] iArr = {-15717821, BAR, BAR, BAR, -15717821, EXPENSE, BAR, -15717821};
-        for (int i = 0; i < 8; i++) {
-            float f = ((i % 4) * 132) + 34;
-            float f2 = ((i / 4) * 62) + 141;
-            Quotation.txt(canvas, typeface, strArr[i], f, f2, 128, 9.0f, -10062718, true, 2);
-            Quotation.txt(canvas, typeface, LedgerMath.money(bigDecimalArr[i]), f, f2 + 27.0f, 128, 14.0f, iArr[i], true);
+    /** Numbers are forced left-to-right so a minus sign stays in front of the digits inside Arabic text. */
+    private static String amount(BigDecimal value) {
+        return "‎" + LedgerMath.grouped(value);
+    }
+
+    private static int descriptionWidth() {
+        return (int) (EDGES[5] - EDGES[4] - 2 * PAD);
+    }
+
+    private static float rowHeight(StaticLayout description, boolean withTime) {
+        return Math.max(withTime ? 34 : 22, description.getHeight()) + 12;
+    }
+
+    private static StaticLayout layout(Typeface font, String text, float size, int color, int width, int maxLines) {
+        String value = DisplayNumbers.latin(text);
+        TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        paint.setTypeface(font);
+        paint.setTextSize(size);
+        paint.setColor(color);
+        return StaticLayout.Builder.obtain(value, 0, value.length(), paint, width)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_RTL)
+                .setIncludePad(false)
+                .setMaxLines(maxLines)
+                .setEllipsize(TextUtils.TruncateAt.END)
+                .build();
+    }
+
+    private static void tableHead(Canvas canvas, Typeface bold, float top) {
+        Quotation.rounded(canvas, LEFT, top, RIGHT, top + HEAD_H, 6, TEAL);
+        Quotation.rect(canvas, LEFT, top + HEAD_H - 6, RIGHT, top + HEAD_H, TEAL);
+        for (int i = 0; i < HEADS.length; i++) {
+            Quotation.txt(canvas, bold, HEADS[i], EDGES[i] + 2, top + 5, (int) (EDGES[i + 1] - EDGES[i] - 4), 9, WHITE, true);
         }
-        Quotation.line(canvas, 48.0f, 201.0f, 548.0f, -2300440);
-        Quotation.rounded(canvas, 48.0f, 248.0f, 548.0f, 269.0f, 6.0f, BAR);
-        Quotation.txt(canvas, typeface, "نقدية المندوب = الافتتاحي + تحصيل كاش − المصروفات", 56.0f, 253.0f, 484, 9.0f, -1, true);
+    }
+
+    private static void drawRow(Canvas canvas, Typeface font, Typeface bold, Row row, float top, int background) {
+        Quotation.rect(canvas, LEFT, top, RIGHT, top + row.height, background);
+        float middle = top + row.height / 2;
+        float single = middle - 9;
+        if (row.time.isEmpty()) {
+            Quotation.txt(canvas, font, row.date, EDGES[5] + 2, single, (int) (EDGES[6] - EDGES[5] - 4), 9, INK, true);
+        } else {
+            Quotation.txt(canvas, font, row.date, EDGES[5] + 2, middle - 17, (int) (EDGES[6] - EDGES[5] - 4), 9, INK, true);
+            Quotation.txt(canvas, font, row.time, EDGES[5] + 2, middle + 1, (int) (EDGES[6] - EDGES[5] - 4), 8, GRAY, true);
+        }
+        canvas.save();
+        canvas.translate(EDGES[4] + PAD, middle - row.description.getHeight() / 2f);
+        row.description.draw(canvas);
+        canvas.restore();
+        Quotation.txt(canvas, font, row.type, EDGES[3] + 2, single, (int) (EDGES[4] - EDGES[3] - 4), 9, row.out.isEmpty() ? INK : EXPENSE, true);
+        Quotation.txt(canvas, font, row.in, EDGES[2] + 2, single, (int) (EDGES[3] - EDGES[2] - 4), 9, TEAL, true);
+        Quotation.txt(canvas, font, row.out, EDGES[1] + 2, single, (int) (EDGES[2] - EDGES[1] - 4), 9, EXPENSE, true);
+        Quotation.txt(canvas, row.opening ? bold : font, row.balance, EDGES[0] + 2, single, (int) (EDGES[1] - EDGES[0] - 4), 9, row.negative ? EXPENSE : NAVY, true);
+        Quotation.line(canvas, LEFT, top + row.height - 0.8f, RIGHT, RULE);
+        for (int i = 1; i < EDGES.length - 1; i++) Quotation.rect(canvas, EDGES[i] - 0.3f, top + 4, EDGES[i] + 0.3f, top + row.height - 4, RULE);
+    }
+
+    private static void summary(Canvas canvas, Typeface font, Typeface bold, String carriedLabel, BigDecimal carried, List<JSONObject> entries, BigDecimal closing) {
+        Quotation.rounded(canvas, LEFT, 124, RIGHT, 270, 10, PALE);
+        String[] labels = {carriedLabel, "تحصيل كاش", "تحصيل شبكة", "تحصيل تحويل", "إجمالي التحصيل", "المصروفات", "صافي الحركة", "النقدية لدى المندوب"};
+        BigDecimal[] values = {carried, LedgerMath.collections(entries, "cash"), LedgerMath.collections(entries, "network"), LedgerMath.collections(entries, "transfer"),
+                LedgerMath.totalCollections(entries), LedgerMath.total(entries, "out"), LedgerMath.netActivity(entries), closing};
+        int[] colors = {NAVY, TEAL, TEAL, TEAL, NAVY, EXPENSE, TEAL, WHITE};
+        for (int i = 0; i < 8; i++) {
+            float x = RIGHT - ((i % 4) + 1) * 132f;
+            float y = i < 4 ? 134 : 196;
+            if (i == 7) Quotation.rounded(canvas, x + 6, y - 6, x + 126, y + 46, 8, TEAL);
+            Quotation.txt(canvas, font, labels[i], x + 4, y, 124, 8.5f, i == 7 ? -2493457 : GRAY, true, 1);
+            Quotation.txt(canvas, i == 7 ? bold : font, amount(values[i]) + CURRENCY, x + 4, y + 17, 124, 12.5f, colors[i], true);
+        }
+        Quotation.line(canvas, 48, 184, 548, RULE);
+        Quotation.rounded(canvas, 48, 248, 548, 264, 5, -1576205);
+        Quotation.txt(canvas, font, "النقدية لدى المندوب = " + carriedLabel + " + تحصيل كاش − المصروفات", 56, 249, 484, 8, NAVY, true);
+    }
+
+    private static void closing(Canvas canvas, Typeface font, Typeface bold, float top, List<JSONObject> entries, BigDecimal closing) {
+        Quotation.rect(canvas, LEFT, top, RIGHT, top + 28, TOTAL_BG);
+        Quotation.rect(canvas, LEFT, top, RIGHT, top + 1.2f, TEAL);
+        Quotation.txt(canvas, bold, "الإجمالي", EDGES[3] + 2, top + 6, (int) (EDGES[6] - EDGES[3] - 4), 10, NAVY, true);
+        Quotation.txt(canvas, bold, amount(LedgerMath.totalCollections(entries)), EDGES[2] + 2, top + 6, (int) (EDGES[3] - EDGES[2] - 4), 9.5f, TEAL, true);
+        Quotation.txt(canvas, bold, amount(LedgerMath.total(entries, "out")), EDGES[1] + 2, top + 6, (int) (EDGES[2] - EDGES[1] - 4), 9.5f, EXPENSE, true);
+        Quotation.txt(canvas, bold, amount(closing), EDGES[0] + 2, top + 6, (int) (EDGES[1] - EDGES[0] - 4), 9.5f, NAVY, true);
+        Quotation.rect(canvas, LEFT, top + 28, RIGHT, top + 29.2f, TEAL);
+        Quotation.txt(canvas, font, "* الرصيد النقدي يتغير بالتحصيل الكاش والمصروفات فقط؛ أما التحصيل بالشبكة أو التحويل فيُودَع في حساب الشركة مباشرة ولا يغيّر نقدية المندوب.",
+                LEFT, top + 36, (int) WIDTH, 7.5f, GRAY, false, 2);
+        float sign = top + 80;
+        String[] titles = {"توقيع المندوب", "اعتماد المراجع / المستلم"};
+        float[] lefts = {RIGHT - 236, LEFT};
+        for (int i = 0; i < 2; i++) {
+            float x = lefts[i];
+            Quotation.txt(canvas, bold, titles[i], x, sign, 236, 9.5f, NAVY, false);
+            Quotation.txt(canvas, font, "الاسم:", x, sign + 22, 236, 8.5f, GRAY, false);
+            Quotation.line(canvas, x, sign + 38, x + 236 - 40, RULE);
+            Quotation.txt(canvas, font, "التوقيع:", x, sign + 46, 236, 8.5f, GRAY, false);
+            Quotation.line(canvas, x, sign + 62, x + 236 - 44, RULE);
+        }
     }
 }
