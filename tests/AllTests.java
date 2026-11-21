@@ -13,6 +13,7 @@ public final class AllTests {
     @Test public void quoteStatuses() throws Exception { QuoteStatusTest.main(new String[0]); }
     @Test public void csvExport() { CsvExportTest.main(new String[0]); }
     @Test public void ledgerMath() throws Exception { LedgerMathTest.main(new String[0]); }
+    @Test public void postContent() throws Exception { PostContentTest.main(new String[0]); }
     @Test public void followUps() { FollowUpsTest.main(new String[0]); }
     @Test public void importAnalysis() { ImportAnalysisTest.main(new String[0]); }
     @Test public void profiles() { ProfilesTest.main(new String[0]); }

@@ -11,7 +11,7 @@ final class BackupPartition {
   for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);String b=r.optString("business");if(b.equals(AppMode.MODE)||(own&&b.isEmpty())){kept.put(r);leads.add(r.getLong("id"));}}out.put("leads",kept);
   out.put("events",related(input,"events","leadId",leads,false));out.put("messages",related(input,"messages","leadId",leads,own));
   out.put("profiles",business(input,"profiles"));JSONArray ps=business(input,"posts");out.put("posts",ps);
-  for(int i=0;i<ps.length();i++){JSONObject r=ps.getJSONObject(i);posts.add(r.getLong("id"));if(!r.optString("image").isEmpty())images.add(r.getString("image"));}
+  for(int i=0;i<ps.length();i++){JSONObject r=ps.getJSONObject(i);posts.add(r.getLong("id"));if(!r.optString("image").isEmpty())images.add(r.getString("image"));images.addAll(PostMedia.names(r));}
   out.put("postShares",related(input,"postShares","postId",posts,false));JSONObject src=input.optJSONObject("postImages"),dest=new JSONObject();if(src!=null)for(String image:images)if(src.has(image))dest.put(image,src.get(image));out.put("postImages",dest);
   JSONArray quotes=new JSONArray();if(AppMode.MODE.equals("survey")){JSONArray qs=input.optJSONArray("quotes");if(qs!=null)for(int i=0;i<qs.length();i++){JSONObject r=qs.getJSONObject(i),data=new JSONObject(r.getString("data"));if(data.optString("business","survey").equals("survey"))quotes.put(r);}}
   out.put("quotes",quotes);out.put("softwareRequests",AppMode.MODE.equals("software")?related(input,"softwareRequests","leadId",leads,false):new JSONArray());out.put("softwareProducts",AppMode.MODE.equals("software")?array(input,"softwareProducts"):new JSONArray());return out.put("appMode",AppMode.MODE);

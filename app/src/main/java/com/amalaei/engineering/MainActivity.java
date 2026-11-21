@@ -175,6 +175,10 @@ public final class MainActivity extends BaseSecureActivity {
             linearLayoutCard.addView(text(jSONObject2.optString("title"), 20));
             linearLayoutCard.addView(pill(jSONObject2.optString("category"), -15434365, -1575950));
             showPostImage(linearLayoutCard, jSONObject2.optString("image"));
+            String mediaSummary = mediaSummary(PostMedia.names(jSONObject2));
+            if (!mediaSummary.isEmpty()) {
+                muted(linearLayoutCard, mediaSummary);
+            }
             String strOptString = jSONObject2.optString("body");
             if (!strOptString.isEmpty()) {
                 if (strOptString.length() > 650) {
@@ -854,7 +858,15 @@ public final class MainActivity extends BaseSecureActivity {
         }
     }
 
+    /** Opens the full-screen post editor (new post, or the given saved post). */
     public void lambda$advertising$114(JSONObject jSONObject) {
+        Intent editor = new Intent(this, PostEditorActivity.class);
+        if (jSONObject.optLong("id") > 0) editor.putExtra(PostEditorActivity.EXTRA_POST, jSONObject.optLong("id"));
+        startActivity(editor);
+    }
+
+    /** Previous dialog editor, kept only for drafts restored from an older saved instance state. */
+    private void legacyPostEditor(JSONObject jSONObject) {
         String[] strArr;
         AlertDialog alertDialog = this.postDialog;
         if (alertDialog != null && alertDialog.isShowing()) {
@@ -3626,6 +3638,22 @@ public final class MainActivity extends BaseSecureActivity {
 
     public void lambda$advertising$113(JSONObject jSONObject) {
         startActivity(new Intent(this, (Class<?>) PostSharingActivity.class).putExtra("postId", jSONObject.optLong("id")));
+    }
+
+    /** "📷 4 صور • 🎬 1 فيديو • GIF 1" for posts with more than a cover photo. */
+    private String mediaSummary(ArrayList<String> files) {
+        int photos = 0, videos = 0, gifs = 0;
+        for (String name : files) {
+            if (PostMedia.isVideo(name)) videos++;
+            else if (PostMedia.isGif(name)) gifs++;
+            else photos++;
+        }
+        if (files.size() <= 1 && videos == 0 && gifs == 0) return "";
+        ArrayList<String> parts = new ArrayList<>();
+        if (photos > 0) parts.add("📷 " + photos + tr(" صور", " photos"));
+        if (videos > 0) parts.add("🎬 " + videos + tr(" فيديو", " video"));
+        if (gifs > 0) parts.add("GIF " + gifs);
+        return String.join("  •  ", parts);
     }
 
     private void showPostImage(LinearLayout linearLayout, String str) {

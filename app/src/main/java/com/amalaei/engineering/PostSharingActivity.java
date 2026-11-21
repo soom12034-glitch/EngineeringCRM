@@ -341,16 +341,29 @@ public final class PostSharingActivity extends BaseSecureActivity {
             if (!"other".equals(str)) {
                 intentPutExtra.setPackage(str);
             }
-            String strOptString = this.post.optString("image");
-            if (strOptString.isEmpty()) {
+            java.util.ArrayList<String> names = PostMedia.names(this.post);
+            if (names.isEmpty()) {
                 intentPutExtra.setType("text/plain");
             } else {
-                if (!PostMedia.file(this, strOptString).isFile()) {
-                    throw new IOException();
+                java.util.ArrayList<Uri> uris = new java.util.ArrayList<>();
+                boolean allImages = true, allVideos = true;
+                for (String name : names) {
+                    if (!PostMedia.file(this, name).isFile()) {
+                        throw new IOException();
+                    }
+                    uris.add(new Uri.Builder().scheme("content").authority(getPackageName() + ".images").appendPath(name).build());
+                    allImages &= !PostMedia.isVideo(name);
+                    allVideos &= PostMedia.isVideo(name);
                 }
-                Uri uriBuild = new Uri.Builder().scheme("content").authority(getPackageName() + ".images").appendPath(strOptString).build();
-                intentPutExtra.setType(PostMedia.mime(strOptString)).putExtra("android.intent.extra.STREAM", uriBuild);
-                intentPutExtra.setClipData(ClipData.newUri(getContentResolver(), "Post", uriBuild));
+                ClipData clip = ClipData.newUri(getContentResolver(), "Post", uris.get(0));
+                for (int i = 1; i < uris.size(); i++) clip.addItem(new ClipData.Item(uris.get(i)));
+                if (uris.size() == 1) {
+                    intentPutExtra.setType(PostMedia.mime(names.get(0))).putExtra("android.intent.extra.STREAM", uris.get(0));
+                } else {
+                    // All files go together; the caption travels with the first one in apps that support it.
+                    intentPutExtra.setAction(Intent.ACTION_SEND_MULTIPLE).setType(allImages ? "image/*" : allVideos ? "video/*" : "*/*").putParcelableArrayListExtra("android.intent.extra.STREAM", uris);
+                }
+                intentPutExtra.setClipData(clip);
                 intentPutExtra.addFlags(1);
             }
             if ("other".equals(str)) {
@@ -385,6 +398,10 @@ public final class PostSharingActivity extends BaseSecureActivity {
         setContentView(scrollView);
         UiTheme.header(this.body, tr("مشاركة وجدولة المنشور", "Post sharing & reminders"), "ads");
         text(this.post.optString("title"), 19);
+        int files = PostMedia.names(this.post).size();
+        if (files > 1) {
+            text(tr("تُرسل ملفات المنشور كلها معًا (" + files + " ملفات) مع النص.", "All " + files + " files of the post are sent together with the caption."), 14);
+        }
         text(tr("التذكير لا ينشر تلقائيًا. اختر المجموعة أو المستلم داخل التطبيق وأتم الإرسال بنفسك. العدد هو عدد مواعيد المشاركة لكل منصة؛ ويُسجّل الإتمام بناءً على تأكيدك فقط. قد يتأخر التنبيه بسبب توفير البطارية.", "Reminders do not post automatically. Choose the group or recipient and send in the target app. Count means reminders per platform; completion is based only on your confirmation. Battery saving may delay notifications."), 14);
         if (!PostSharing.allowed(this)) {
             button(tr("تفعيل إشعارات المشاركة", "Enable sharing notifications"), new Runnable() {

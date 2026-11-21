@@ -110,22 +110,21 @@ final class PostSharing {
         sharedPreferences.edit().putString("history", jSONArray2.toString()).commit();
     }
 
+    /** Replaces the reminder plan of one post on one platform; invalid input is rejected without changing anything. */
     static synchronized void replace(Context context, long j, String str, int i, int i2, long j2) throws JSONException {
-        if (j > 0) {
-            if ((FACEBOOK.equals(str) || BUSINESS.equals(str)) && i >= 1 && i <= 100 && i2 >= 15 && i2 <= 43200) {
-                JSONArray jSONArrayLoad = load(context);
-                for (int i3 = 0; i3 < jSONArrayLoad.length(); i3++) {
-                    JSONObject jSONObject = jSONArrayLoad.getJSONObject(i3);
-                    if (jSONObject.optLong("post") == j && str.equals(jSONObject.optString("target"))) {
-                        jSONObject.put("active", false);
-                    }
-                }
-                jSONArrayLoad.put(new JSONObject().put("id", UUID.randomUUID().toString()).put("post", j).put("target", str).put("total", i).put("remaining", i).put("minutes", i2).put("next", j2).put("active", true).put("notified", false));
-                save(context, jSONArrayLoad);
-                schedule(context);
+        if (j <= 0 || !(FACEBOOK.equals(str) || BUSINESS.equals(str)) || i < 1 || i > 100 || i2 < 15 || i2 > 43200) {
+            throw new IllegalArgumentException();
+        }
+        JSONArray jSONArrayLoad = load(context);
+        for (int i3 = 0; i3 < jSONArrayLoad.length(); i3++) {
+            JSONObject jSONObject = jSONArrayLoad.getJSONObject(i3);
+            if (jSONObject.optLong("post") == j && str.equals(jSONObject.optString("target"))) {
+                jSONObject.put("active", false);
             }
         }
-        throw new IllegalArgumentException();
+        jSONArrayLoad.put(new JSONObject().put("id", UUID.randomUUID().toString()).put("post", j).put("target", str).put("total", i).put("remaining", i).put("minutes", i2).put("next", j2).put("active", true).put("notified", false));
+        save(context, jSONArrayLoad);
+        schedule(context);
     }
 
     static void save(Context context, JSONArray jSONArray) {

@@ -15,6 +15,7 @@
     <activity android:name=".ReportsActivity" android:exported="false" />
     <activity android:name=".PostSharingActivity" android:exported="false" />
     <activity android:name=".DeveloperActivity" android:exported="false" />
+    <activity android:name=".PostEditorActivity" android:exported="false" android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" android:windowSoftInputMode="adjustResize" />
     <receiver android:name=".PostShareReceiver" android:exported="false">
       <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /><action android:name="android.intent.action.TIME_SET" /></intent-filter>
     </receiver>
